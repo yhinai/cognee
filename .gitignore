@@ -1,0 +1,49 @@
+# IDE & Editor
+.vscode/
+.idea/
+.trae/
+*.swp
+*.swo
+*~
+
+# Build artifacts
+.build/
+build/
+DerivedData/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+venv/
+
+# Logs
+*.log
+
+# Environment & Config
+.env
+local.env
+.env.local
+.env.*.local
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# GGUF models (large binary files)
+models/
+
+# Cognee data
+.cognee_data/
+
+# Temporary & Test
+tmp/
+temp/
+*.tmp
+cognee-qdrant-starter/
