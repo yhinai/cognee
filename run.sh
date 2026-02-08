@@ -6,8 +6,9 @@
 #
 # Usage:
 #   ./run.sh              Launch all services + Clippy.app
-#   ./run.sh --no-app     Launch backend services only (skip Swift build)
+#   ./run.sh --debug      Launch all + run Clippy.app in debug mode (logs visible)
 #   ./run.sh --test       Launch services + run full pipeline test
+#   ./run.sh --no-app     Launch backend services only (skip Swift build)
 # ============================================================================
 set -e
 
@@ -22,10 +23,12 @@ QDRANT_PORT=6333
 # Parse args
 SKIP_APP=false
 RUN_TEST=false
+DEBUG_MODE=false
 for arg in "$@"; do
     case "$arg" in
-        --no-app)  SKIP_APP=true ;;
-        --test)    RUN_TEST=true ;;
+        --no-app)     SKIP_APP=true ;;
+        --test)       RUN_TEST=true ;;
+        --debug|-d)   DEBUG_MODE=true ;;
     esac
 done
 
@@ -105,7 +108,7 @@ LLM_MODEL="$MODELS_DIR/cognee-distillabs-model-gguf-quantized/model-quantized.gg
 LLM_FALLBACK="$MODELS_DIR/Qwen3-4B-Q4_K_M/Qwen3-4B-Q4_K_M.gguf"
 
 if [ -f "$EMBED_MODEL" ]; then
-    ok "Embed model: nomic-embed-text ($(du -sh "$EMBED_MODEL" | cut -f1))"
+    ok "Embed model: nomic-embed-text ($(du -shL "$EMBED_MODEL" | cut -f1))"
 else
     err "Embedding model missing: $EMBED_MODEL"
     err "Run: ./download-models.sh"
@@ -113,9 +116,9 @@ else
 fi
 
 if [ -f "$LLM_MODEL" ]; then
-    ok "LLM model:   Distil Labs SLM ($(du -sh "$LLM_MODEL" | cut -f1))"
+    ok "LLM model:   Distil Labs SLM ($(du -shL "$LLM_MODEL" | cut -f1))"
 elif [ -f "$LLM_FALLBACK" ]; then
-    ok "LLM model:   Qwen3-4B fallback ($(du -sh "$LLM_FALLBACK" | cut -f1))"
+    ok "LLM model:   Qwen3-4B fallback ($(du -shL "$LLM_FALLBACK" | cut -f1))"
     warn "Distil Labs SLM not found — using Qwen3-4B"
 else
     err "No LLM model. Run: ./download-models.sh"
@@ -258,12 +261,18 @@ fi
 # ── 8. Build & launch Clippy.app ────────────────────────────────────────────
 if [ "$SKIP_APP" = false ] && [ -f "$SCRIPT_DIR/build-app.sh" ]; then
     echo ""
-    log "Building and launching Clippy.app..."
-    cd "$SCRIPT_DIR"
-    bash build-app.sh &
-    APP_PID=$!
-    sleep 3
-    ok "Clippy.app launched"
+    if [ "$DEBUG_MODE" = true ]; then
+        log "Building and launching Clippy.app (DEBUG mode — logs below)..."
+        cd "$SCRIPT_DIR"
+        bash build-app.sh --debug
+    else
+        log "Building and launching Clippy.app..."
+        cd "$SCRIPT_DIR"
+        bash build-app.sh &
+        APP_PID=$!
+        sleep 3
+        ok "Clippy.app launched"
+    fi
 fi
 
 echo ""

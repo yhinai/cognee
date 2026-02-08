@@ -61,7 +61,7 @@ def init_llm(model_paths: list[tuple[str, str]] | None = None):
     print("WARNING: No LLM model found. LLM features disabled.")
 
 
-def get_llm_response(system_prompt: str, user_prompt: str, max_tokens: int = 512) -> str:
+def get_llm_response(system_prompt: str, user_prompt: str, max_tokens: int = 256) -> str:
     """Generate a chat completion using either local or remote LLM."""
     mode = _mode or _get_mode()
 
@@ -80,8 +80,16 @@ def _local_completion(system_prompt: str, user_prompt: str, max_tokens: int) -> 
         ],
         max_tokens=max_tokens,
         temperature=0.3,
+        repeat_penalty=1.3,
+        stop=["[/INST]", "[INST]", "</s>", "<|im_end|>", "<|endoftext|>"],
     )
-    return response["choices"][0]["message"]["content"]
+    text = response["choices"][0]["message"]["content"].strip()
+    # Guard: if the model still managed to repeat, keep only the first answer
+    for marker in ["[/INST]", "\n\n\n"]:
+        if marker in text:
+            text = text[:text.index(marker)].strip()
+            break
+    return text
 
 
 def _remote_completion(system_prompt: str, user_prompt: str, max_tokens: int) -> str:

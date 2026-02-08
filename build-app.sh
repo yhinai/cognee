@@ -15,13 +15,16 @@ done
 # Kill existing processes
 killall -9 Clippy 2>/dev/null
 
+TARGET_DIR="/Users/alhinai/Desktop"
+
 echo "🔨 Building Clippy..."
 
-# Build
+# Build to Desktop
 xcodebuild -project Clippy.xcodeproj \
            -scheme Clippy \
            -destination 'platform=macOS,arch=arm64' \
            -configuration Debug \
+           SYMROOT="$TARGET_DIR/ClippyBuild" \
            CODE_SIGN_IDENTITY="" \
            CODE_SIGNING_REQUIRED=NO \
            CODE_SIGNING_ALLOWED=NO \
@@ -34,12 +37,8 @@ fi
 
 echo "✅ Build succeeded"
 
-# Get app path
-BUILD_SETTINGS=$(xcodebuild -project Clippy.xcodeproj -scheme Clippy -showBuildSettings -configuration Debug 2>/dev/null)
-TARGET_BUILD_DIR=$(echo "$BUILD_SETTINGS" | grep " TARGET_BUILD_DIR =" | cut -d "=" -f 2 | xargs)
-FULL_PRODUCT_NAME=$(echo "$BUILD_SETTINGS" | grep " FULL_PRODUCT_NAME =" | cut -d "=" -f 2 | xargs)
-APP_PATH="$TARGET_BUILD_DIR/$FULL_PRODUCT_NAME"
-EXECUTABLE_NAME=$(echo "$BUILD_SETTINGS" | grep " EXECUTABLE_NAME =" | cut -d "=" -f 2 | xargs)
+APP_PATH="$TARGET_DIR/ClippyBuild/Debug/Clippy.app"
+EXECUTABLE_NAME="Clippy"
 
 if [ -d "$APP_PATH" ]; then
     if [ "$DEBUG_MODE" = true ]; then
