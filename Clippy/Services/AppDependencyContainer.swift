@@ -54,8 +54,9 @@ class AppDependencyContainer: ObservableObject {
         }
         self.selectedAIServiceType = initialServiceType
 
-        // 1. Initialize Independent Services
-        self.vectorSearch = VectorSearchService()
+        // 1. Initialize Independent Services (backend first so vector search can use it)
+        self.backendService = BackendService()
+        self.vectorSearch = VectorSearchService(backendService: backendService)
         self.contextEngine = ContextEngine()
         self.visionParser = VisionScreenParser()
         self.hotkeyManager = HotkeyManager()
@@ -66,7 +67,6 @@ class AppDependencyContainer: ObservableObject {
         self.usageTracker = UsageTracker()
         self.geminiService = GeminiService(apiKey: KeychainHelper.load(key: "Gemini_API_Key") ?? "")
         self.textCaptureService = TextCaptureService()
-        self.backendService = BackendService()
 
         // 2. Multi-provider AI setup
         self.claudeProvider = ClaudeProvider()

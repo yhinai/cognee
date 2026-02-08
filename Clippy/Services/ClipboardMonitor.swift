@@ -205,9 +205,11 @@ class ClipboardMonitor: ObservableObject {
                 description = await gemini.analyzeImage(imageData: pngData) ?? "[Image]"
             }
             
+            let finalDescription = description
+            let finalTitle = title
             await MainActor.run {
-                item.content = description
-                item.title = title
+                item.content = finalDescription
+                item.title = finalTitle
             }
             
             if let repo = await self.repository {
@@ -316,18 +318,20 @@ class ClipboardMonitor: ObservableObject {
                 }
             }
 
-            let shouldUpdate = !tags.isEmpty || generatedTitle != nil
+            let finalTags = tags
+            let finalGeneratedTitle = generatedTitle
+            let shouldUpdate = !finalTags.isEmpty || finalGeneratedTitle != nil
             if shouldUpdate, let repo = await self.repository {
                 await MainActor.run {
-                    if !tags.isEmpty {
-                        item.tags = tags
+                    if !finalTags.isEmpty {
+                        item.tags = finalTags
                     }
-                    if let title = generatedTitle, item.title == nil {
+                    if let title = finalGeneratedTitle, item.title == nil {
                         item.title = title
                     }
                     Task {
                         try? await repo.updateItem(item)
-                        Logger.clipboard.info("Enhanced item (tags: \(tags.count, privacy: .public), title: \(generatedTitle != nil, privacy: .public))")
+                        Logger.clipboard.info("Enhanced item (tags: \(finalTags.count, privacy: .public), title: \(finalGeneratedTitle != nil, privacy: .public))")
                     }
                 }
             }

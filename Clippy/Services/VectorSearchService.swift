@@ -10,12 +10,17 @@ class VectorSearchService: ObservableObject, VectorSearching {
     @Published var isInitialized = false
     @Published var statusMessage = "Waiting for first use..."
 
+    private weak var backendService: BackendService?
     private var vectorDB: VecturaMLXKit?
     private var pendingVectorItems: [(UUID, String)] = []
     private var isInitializing = false
 
     /// O(1) lookup from vector IDs to track which documents are indexed
     private var indexedVectorIds: Set<UUID> = []
+
+    init(backendService: BackendService? = nil) {
+        self.backendService = backendService
+    }
 
     /// Lazily initialize the VectorDB on first use.
     /// Call sites (addDocument, search) invoke this automatically.
@@ -91,27 +96,38 @@ class VectorSearchService: ObservableObject, VectorSearching {
     }
     
     func search(query: String, limit: Int = 10) async -> [(UUID, Float)] {
+        // Prefer backend search when available to avoid VecturaMLXKit crash (SIGSEGV in vDSP_dotpr).
+        if let backend = backendService {
+            if !backend.isBackendAvailable {
+                await backend.checkHealth()
+            }
+            if backend.isBackendAvailable, let response = await backend.search(query: query, limit: limit) {
+                let pairs: [(UUID, Float)] = response.results.compactMap { result in
+                    guard let uuid = UUID(uuidString: result.id) else { return nil }
+                    return (uuid, Float(result.score))
+                }
+                Logger.vector.info("Backend search: \(pairs.count, privacy: .public) results")
+                return pairs
+            }
+        }
+
         await ensureInitialized()
 
         guard let vectorDB = vectorDB else {
             Logger.vector.warning("Cannot search - vectorDB not initialized")
             return []
         }
-        
-        Logger.vector.info("Searching (limit: \(limit, privacy: .public))")
-        
+
+        Logger.vector.info("Searching local (limit: \(limit, privacy: .public))")
+
         do {
             let results = try await vectorDB.search(
                 query: query,
                 numResults: limit,
-                threshold: nil // No threshold, we'll rank ourselves
+                threshold: nil
             )
-            
+
             Logger.vector.info("Found \(results.count, privacy: .public) results")
-            for (index, result) in results.prefix(5).enumerated() {
-                Logger.vector.debug("\(index + 1, privacy: .public). ID: \(result.id, privacy: .private), Score: \(String(format: "%.3f", result.score), privacy: .public)")
-            }
-            
             return results.map { ($0.id, $0.score) }
         } catch {
             Logger.vector.error("Search error: \(error.localizedDescription, privacy: .public)")

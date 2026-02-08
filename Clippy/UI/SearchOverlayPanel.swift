@@ -90,10 +90,13 @@ class SearchOverlayController: ObservableObject {
             ctx.timingFunction = CAMediaTimingFunction(name: .easeIn)
             panel.animator().alphaValue = 0
         }, completionHandler: { [weak self] in
-            panel.orderOut(nil)
-            self?.panel = nil
-            self?.isVisible = false
-            Logger.ui.info("Search overlay hidden")
+            Task { @MainActor in
+                guard let self = self else { return }
+                panel.orderOut(nil)
+                self.panel = nil
+                self.isVisible = false
+                Logger.ui.info("Search overlay hidden")
+            }
         })
     }
 
