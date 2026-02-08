@@ -1,38 +1,60 @@
 #!/bin/bash
 # ============================================================================
-# Clippy AI — run.sh
-# One command to launch everything:
-#   Docker → Qdrant → Python Backend (Cognee + Qdrant + Distil Labs SLM) → Clippy.app
+# Clippy AI — run.sh (single entry point)
 #
 # Usage:
-#   ./run.sh              Launch all services + Clippy.app
-#   ./run.sh --debug      Launch all + run Clippy.app in debug mode (logs visible)
-#   ./run.sh --test       Launch services + run full pipeline test
-#   ./run.sh --no-app     Launch backend services only (skip Swift build)
+#   ./run.sh                   Launch all services + Clippy.app
+#   ./run.sh --debug           Launch all + Clippy.app in debug mode (logs visible)
+#   ./run.sh --test            Launch services + run full pipeline test
+#   ./run.sh --no-app          Backend services only (skip Swift build)
+#   ./run.sh --download        Download GGUF models only
+#   ./run.sh --build           Build Clippy.app only (no backend)
+#   ./run.sh --stop            Stop all services
 # ============================================================================
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BACKEND_DIR="$SCRIPT_DIR/clippy-backend"
 MODELS_DIR="$SCRIPT_DIR/models"
+BUILD_DIR="$SCRIPT_DIR/build"
 PYTHON_BIN="${PYTHON_BIN:-/opt/homebrew/bin/python3.12}"
 
 BACKEND_PORT=8420
 QDRANT_PORT=6333
 
-# Parse args
+# ── Parse args ─────────────────────────────────────────────────────────────
 SKIP_APP=false
 RUN_TEST=false
 DEBUG_MODE=false
+CMD_DOWNLOAD=false
+CMD_BUILD=false
+CMD_STOP=false
+
 for arg in "$@"; do
     case "$arg" in
         --no-app)     SKIP_APP=true ;;
         --test)       RUN_TEST=true ;;
         --debug|-d)   DEBUG_MODE=true ;;
+        --download)   CMD_DOWNLOAD=true ;;
+        --build)      CMD_BUILD=true ;;
+        --stop)       CMD_STOP=true ;;
+        --help|-h)
+            echo "Usage: ./run.sh [OPTIONS]"
+            echo ""
+            echo "  (no args)     Launch all: Docker, Qdrant, backend, Clippy.app"
+            echo "  --debug, -d   Launch all + run Clippy.app with visible logs"
+            echo "  --test        Launch services + run 10-endpoint pipeline test"
+            echo "  --no-app      Backend services only, skip Swift build"
+            echo "  --download    Download GGUF models (nomic-embed-text, Distil Labs SLM, Qwen3-4B)"
+            echo "  --build       Build Clippy.app only (no backend)"
+            echo "  --stop        Stop all services (backend, Qdrant)"
+            echo "  --help, -h    Show this help"
+            exit 0
+            ;;
     esac
 done
 
-# Colors
+# ── Colors ─────────────────────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 BLUE='\033[0;34m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 
@@ -41,7 +63,122 @@ ok()  { echo -e "${GREEN}  [OK]${NC} $1"; }
 warn(){ echo -e "${YELLOW}[WARN]${NC} $1"; }
 err() { echo -e "${RED}[FAIL]${NC} $1"; }
 
-# ── Cleanup on exit ─────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════
+# --stop: kill everything and exit
+# ═══════════════════════════════════════════════════════════════════════════
+
+if [ "$CMD_STOP" = true ]; then
+    log "Stopping all services..."
+    killall -9 Clippy 2>/dev/null && log "Stopped Clippy.app" || true
+    pkill -f "uvicorn app:app" 2>/dev/null && log "Stopped backend" || true
+    cd "$SCRIPT_DIR" && docker compose stop qdrant 2>/dev/null && log "Stopped Qdrant" || true
+    ok "All services stopped."
+    exit 0
+fi
+
+# ═══════════════════════════════════════════════════════════════════════════
+# --download: download GGUF models
+# ═══════════════════════════════════════════════════════════════════════════
+
+download_models() {
+    echo ""
+    echo -e "${CYAN}${BOLD}  Clippy AI — Model Downloader${NC}"
+    echo ""
+
+    local HAS_HF=false
+    command -v huggingface-cli &>/dev/null && HAS_HF=true
+
+    download_hf_file() {
+        local repo="$1" filename="$2" output_dir="$3"
+        local output_file="$output_dir/$filename"
+        mkdir -p "$output_dir"
+
+        if [ -f "$output_file" ]; then
+            ok "$filename already exists"
+            return 0
+        fi
+
+        log "Downloading $filename from $repo..."
+        if $HAS_HF; then
+            huggingface-cli download "$repo" "$filename" --local-dir "$output_dir"
+        else
+            curl -L -o "$output_file" "https://huggingface.co/$repo/resolve/main/$filename" --progress-bar
+        fi
+
+        [ -f "$output_file" ] && ok "$filename downloaded" || warn "Failed to download $filename"
+    }
+
+    log "1/3: nomic-embed-text (embedding model)"
+    download_hf_file "nomic-ai/nomic-embed-text-v1.5-GGUF" "nomic-embed-text-v1.5.f16.gguf" "$MODELS_DIR/nomic-embed-text"
+
+    log "2/3: Distil Labs SLM (primary LLM)"
+    download_hf_file "distillabs/cognee-distillabs-gguf-quantized" "model-quantized.gguf" "$MODELS_DIR/cognee-distillabs-model-gguf-quantized"
+
+    log "3/3: Qwen3-4B Q4_K_M (fallback LLM)"
+    download_hf_file "unsloth/Qwen3-4B-GGUF" "Qwen3-4B-Q4_K_M.gguf" "$MODELS_DIR/Qwen3-4B-Q4_K_M"
+
+    echo ""
+    ok "Models directory: $MODELS_DIR"
+    ls -lhL "$MODELS_DIR"/*/*.gguf 2>/dev/null || warn "No .gguf files found"
+    echo ""
+}
+
+if [ "$CMD_DOWNLOAD" = true ]; then
+    download_models
+    exit 0
+fi
+
+# ═══════════════════════════════════════════════════════════════════════════
+# --build: build Swift app only
+# ═══════════════════════════════════════════════════════════════════════════
+
+build_app() {
+    killall -9 Clippy 2>/dev/null || true
+
+    log "Building Clippy.app..."
+    xcodebuild -project "$SCRIPT_DIR/Clippy.xcodeproj" \
+               -scheme Clippy \
+               -destination 'platform=macOS,arch=arm64' \
+               -configuration Debug \
+               SYMROOT="$BUILD_DIR" \
+               CODE_SIGN_IDENTITY="" \
+               CODE_SIGNING_REQUIRED=NO \
+               CODE_SIGNING_ALLOWED=NO \
+               -quiet
+
+    if [ $? -ne 0 ]; then
+        err "Build failed"
+        return 1
+    fi
+    ok "Build succeeded"
+    return 0
+}
+
+launch_app() {
+    local app_path="$BUILD_DIR/Debug/Clippy.app"
+    if [ ! -d "$app_path" ]; then
+        err "App not found at $app_path"
+        return 1
+    fi
+
+    if [ "$DEBUG_MODE" = true ]; then
+        log "Launching Clippy.app (DEBUG — logs below)..."
+        "$app_path/Contents/MacOS/Clippy"
+    else
+        open "$app_path"
+        ok "Clippy.app launched"
+    fi
+}
+
+if [ "$CMD_BUILD" = true ]; then
+    build_app && launch_app
+    exit $?
+fi
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Default: full-stack launch
+# ═══════════════════════════════════════════════════════════════════════════
+
 cleanup() {
     echo ""
     log "Shutting down..."
@@ -59,7 +196,7 @@ echo -e "${CYAN}${BOLD}  Cognee + Qdrant + Distil Labs SLM${NC}"
 echo -e "${CYAN}${BOLD}==========================================${NC}"
 echo ""
 
-# ── 1. Python ────────────────────────────────────────────────────────────────
+# ── 1. Python ──────────────────────────────────────────────────────────────
 if [ ! -f "$PYTHON_BIN" ]; then
     PYTHON_BIN=$(which python3.12 2>/dev/null || which python3.11 2>/dev/null || which python3 2>/dev/null)
 fi
@@ -69,7 +206,7 @@ if [ -z "$PYTHON_BIN" ]; then
 fi
 ok "Python: $($PYTHON_BIN --version 2>&1)"
 
-# ── 2. Docker + Qdrant ──────────────────────────────────────────────────────
+# ── 2. Docker + Qdrant ────────────────────────────────────────────────────
 if curl -s "http://localhost:$QDRANT_PORT/healthz" > /dev/null 2>&1; then
     ok "Qdrant already running (port $QDRANT_PORT)"
 else
@@ -102,16 +239,20 @@ else
     ok "Qdrant ready (port $QDRANT_PORT)"
 fi
 
-# ── 3. Model files ──────────────────────────────────────────────────────────
+# ── 3. Model files (auto-download if missing) ─────────────────────────────
 EMBED_MODEL="$MODELS_DIR/nomic-embed-text/nomic-embed-text-v1.5.f16.gguf"
 LLM_MODEL="$MODELS_DIR/cognee-distillabs-model-gguf-quantized/model-quantized.gguf"
 LLM_FALLBACK="$MODELS_DIR/Qwen3-4B-Q4_K_M/Qwen3-4B-Q4_K_M.gguf"
 
+if [ ! -f "$EMBED_MODEL" ] || { [ ! -f "$LLM_MODEL" ] && [ ! -f "$LLM_FALLBACK" ]; }; then
+    warn "Models missing — downloading automatically..."
+    download_models
+fi
+
 if [ -f "$EMBED_MODEL" ]; then
     ok "Embed model: nomic-embed-text ($(du -shL "$EMBED_MODEL" | cut -f1))"
 else
-    err "Embedding model missing: $EMBED_MODEL"
-    err "Run: ./download-models.sh"
+    err "Embedding model missing. Run: ./run.sh --download"
     exit 1
 fi
 
@@ -121,11 +262,11 @@ elif [ -f "$LLM_FALLBACK" ]; then
     ok "LLM model:   Qwen3-4B fallback ($(du -shL "$LLM_FALLBACK" | cut -f1))"
     warn "Distil Labs SLM not found — using Qwen3-4B"
 else
-    err "No LLM model. Run: ./download-models.sh"
+    err "No LLM model. Run: ./run.sh --download"
     exit 1
 fi
 
-# ── 4. Python venv + deps ───────────────────────────────────────────────────
+# ── 4. Python venv + deps ─────────────────────────────────────────────────
 cd "$BACKEND_DIR"
 if [ ! -d "venv" ]; then
     log "Creating Python venv..."
@@ -142,13 +283,12 @@ COGNEE_OK="no"
 python -c "import cognee" 2>/dev/null && COGNEE_OK="yes"
 ok "Dependencies ready (cognee: $COGNEE_OK)"
 
-# ── 5. FastAPI backend ──────────────────────────────────────────────────────
+# ── 5. FastAPI backend ────────────────────────────────────────────────────
 if curl -s "http://localhost:$BACKEND_PORT/health" > /dev/null 2>&1; then
     ok "Backend already running (port $BACKEND_PORT)"
 else
     log "Starting backend (loading GGUF models on Metal GPU)..."
     cd "$BACKEND_DIR"
-    # Filter out harmless noisy messages from log
     uvicorn app:app --host 127.0.0.1 --port "$BACKEND_PORT" --workers 1 2>&1 \
         | grep -v "ggml_metal_init: skipping" \
         | grep -v "n_ctx_per_seq.*n_ctx_train" \
@@ -174,7 +314,7 @@ else
     ok "Backend ready (port $BACKEND_PORT, PID $BACKEND_PID)"
 fi
 
-# ── 6. Print status ─────────────────────────────────────────────────────────
+# ── 6. Print status ───────────────────────────────────────────────────────
 echo ""
 HEALTH=$(curl -s "http://localhost:$BACKEND_PORT/health" 2>/dev/null)
 echo -e "${CYAN}${BOLD}  Services:${NC}"
@@ -199,20 +339,8 @@ echo -e "${CYAN}${BOLD}  URLs:${NC}"
 echo "    API docs:  http://localhost:$BACKEND_PORT/docs"
 echo "    Qdrant:    http://localhost:$QDRANT_PORT/dashboard"
 echo "    Health:    http://localhost:$BACKEND_PORT/health"
-echo ""
-echo -e "${CYAN}${BOLD}  Endpoints:${NC}"
-echo "    GET  /search          Prefetch+RRF Fusion semantic search"
-echo "    GET  /search/grouped  Group by appName or contentType"
-echo "    GET  /discover        Discovery API (more/less like this)"
-echo "    GET  /recommend       Recommend API"
-echo "    GET  /filter          Payload-filtered search"
-echo "    GET  /ask             RAG: retrieve + Distil Labs SLM answer"
-echo "    GET  /cognee-search   Cognee graph-aware search"
-echo "    POST /add-knowledge   Cognee add + cognify (OpenAI gpt-4o-mini)"
-echo "    POST /add-item        Embed + upsert to Qdrant"
-echo "    POST /extract-entities Entity extraction"
 
-# ── 7. Optional: full pipeline test ─────────────────────────────────────────
+# ── 7. Optional: pipeline test ─────────────────────────────────────────────
 if [ "$RUN_TEST" = true ]; then
     echo ""
     log "Running full pipeline test..."
@@ -232,16 +360,14 @@ def test(method, path, body=None, label='', timeout=30):
         else:
             req = urllib.request.Request(f'{BASE}{path}')
         with urllib.request.urlopen(req, timeout=timeout) as r:
-            result = json.loads(r.read())
+            json.loads(r.read())
             ms = round((time.time()-t0)*1000)
             print(f'  \033[0;32m✓\033[0m {label} ({ms}ms)')
             passed += 1
-            return result
     except Exception as e:
         ms = round((time.time()-t0)*1000)
         print(f'  \033[0;31m✗\033[0m {label} ({ms}ms): {e}')
         failed += 1
-        return None
 
 test('GET',  '/health', label='Health check')
 test('GET',  '/collections', label='Qdrant collections')
@@ -258,20 +384,16 @@ print(f'\n  Results: {passed} passed, {failed} failed')
 "
 fi
 
-# ── 8. Build & launch Clippy.app ────────────────────────────────────────────
-if [ "$SKIP_APP" = false ] && [ -f "$SCRIPT_DIR/build-app.sh" ]; then
+# ── 8. Build & launch Clippy.app ──────────────────────────────────────────
+if [ "$SKIP_APP" = false ]; then
     echo ""
+    build_app || exit 1
     if [ "$DEBUG_MODE" = true ]; then
-        log "Building and launching Clippy.app (DEBUG mode — logs below)..."
-        cd "$SCRIPT_DIR"
-        bash build-app.sh --debug
+        launch_app
     else
-        log "Building and launching Clippy.app..."
-        cd "$SCRIPT_DIR"
-        bash build-app.sh &
+        launch_app &
         APP_PID=$!
-        sleep 3
-        ok "Clippy.app launched"
+        sleep 2
     fi
 fi
 

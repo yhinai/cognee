@@ -10,9 +10,13 @@ General-purpose clipboard intelligence backend:
 - OpenAI-compatible /v1/chat/completions endpoint for Cognee's cognify()
 """
 
+import asyncio
+import json
 import logging
 import os
 import re
+import subprocess
+import sys
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -37,6 +41,7 @@ os.environ.setdefault("VECTOR_DB_URL", os.getenv("QDRANT_URL", "http://localhost
 os.environ.setdefault("VECTOR_DATASET_DATABASE_HANDLER", "qdrant")
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from qdrant_client import QdrantClient
 from qdrant_client.models import (
@@ -64,7 +69,9 @@ from shared.llm import init_llm, get_llm_response, is_available as llm_available
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
 logger = logging.getLogger("clippy-backend")
 
-# --- Paths ---
+# ═══════════════════════════════════════════════════════════════════════
+# Paths
+# ═══════════════════════════════════════════════════════════════════════
 BASE_DIR = os.path.dirname(__file__)
 MODELS_DIR = os.path.join(BASE_DIR, "..", "models")
 
@@ -76,20 +83,25 @@ QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 COLLECTION = "clippy_items"
 VECTOR_DIM = 768
 
-# --- Qdrant client ---
+# ═══════════════════════════════════════════════════════════════════════
+# Qdrant Client
+# ═══════════════════════════════════════════════════════════════════════
 qdrant = QdrantClient(url=QDRANT_URL)
 
-# --- Cognee (optional, graceful fallback) ---
+# ═══════════════════════════════════════════════════════════════════════
+# Cognee (optional, graceful fallback)
+# ═══════════════════════════════════════════════════════════════════════
 cognee_available = False
 try:
     import cognee
-    from cognee.api.v1.search import SearchType
     cognee_available = True
 except ImportError:
     pass
 
 
-# --- Pydantic models ---
+# ═══════════════════════════════════════════════════════════════════════
+# Pydantic Models
+# ═══════════════════════════════════════════════════════════════════════
 
 class AddItemRequest(BaseModel):
     content: str
@@ -113,7 +125,9 @@ class EntityResult(BaseModel):
     value: str
 
 
-# --- Entity extraction (general-purpose, regex-based) ---
+# ═══════════════════════════════════════════════════════════════════════
+# Entity Extraction (regex-based)
+# ═══════════════════════════════════════════════════════════════════════
 
 _ENTITY_PATTERNS = [
     ("url", re.compile(r'https?://[^\s<>"{}|\\^`\[\]]+', re.IGNORECASE)),
@@ -130,7 +144,6 @@ _ENTITY_PATTERNS = [
 def _fix_perspective(text: str) -> str:
     """Fix first-person pronouns to second-person in LLM answers.
     Small local models often ignore the 'use second person' instruction."""
-    import re
     # Order matters: longer phrases first to avoid partial replacements
     replacements = [
         (r'\bI was\b', 'You were'),
@@ -179,7 +192,47 @@ def extract_entities(text: str) -> list[dict]:
     return entities
 
 
-# --- Qdrant helpers ---
+def _point_to_dict(point) -> dict:
+    """Convert a Qdrant ScoredPoint to a JSON-serializable dict."""
+    payload = point.payload or {}
+    return {
+        "id": str(point.id),
+        "score": point.score,
+        "content": payload.get("content", ""),
+        "contentType": payload.get("contentType", ""),
+        "appName": payload.get("appName", ""),
+        "title": payload.get("title", ""),
+        "tags": payload.get("tags", []),
+    }
+
+
+async def _run_cognee_worker(action_payload: dict, timeout_s: int = 30) -> dict:
+    """Run a cognee_worker.py subprocess and return parsed JSON result."""
+    worker_path = os.path.join(BASE_DIR, "cognee_worker.py")
+    venv_python = os.path.join(BASE_DIR, "venv", "bin", "python")
+    python_exe = venv_python if os.path.exists(venv_python) else sys.executable
+
+    proc = await asyncio.get_event_loop().run_in_executor(
+        None,
+        lambda: subprocess.run(
+            [python_exe, worker_path],
+            input=json.dumps(action_payload),
+            capture_output=True, text=True, timeout=timeout_s,
+            cwd=BASE_DIR,
+        ),
+    )
+    if proc.returncode != 0:
+        err = (proc.stderr or proc.stdout or "unknown error")[-300:]
+        raise RuntimeError(f"Worker failed (rc={proc.returncode}): {err}")
+    result = json.loads(proc.stdout)
+    if not result.get("ok"):
+        raise RuntimeError(result.get("error", "unknown error"))
+    return result
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Qdrant Helpers
+# ═══════════════════════════════════════════════════════════════════════
 
 def ensure_collection():
     """Create the clippy_items collection if it does not exist."""
@@ -214,7 +267,9 @@ def setup_payload_indexes():
             pass
 
 
-# --- Lifespan ---
+# ═══════════════════════════════════════════════════════════════════════
+# Lifespan
+# ═══════════════════════════════════════════════════════════════════════
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -281,7 +336,9 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down Clippy Backend.")
 
 
-# --- App ---
+# ═══════════════════════════════════════════════════════════════════════
+# App
+# ═══════════════════════════════════════════════════════════════════════
 
 app = FastAPI(title="Clippy Backend", version="1.0.0", lifespan=lifespan)
 
@@ -366,19 +423,7 @@ async def search(
         )
     search_ms = round((time.time() - t1) * 1000, 1)
 
-    items = []
-    for point in results.points:
-        payload = point.payload or {}
-        items.append({
-            "id": str(point.id),
-            "score": point.score,
-            "content": payload.get("content", ""),
-            "contentType": payload.get("contentType", ""),
-            "appName": payload.get("appName", ""),
-            "title": payload.get("title", ""),
-            "tags": payload.get("tags", []),
-            "payload": payload,
-        })
+    items = [_point_to_dict(p) for p in results.points]
 
     return {
         "query": q,
@@ -422,20 +467,8 @@ async def search_grouped(
     total = 0
     for group in groups.groups:
         key = str(group.id)
-        result_groups[key] = []
-        for hit in group.hits:
-            payload = hit.payload or {}
-            result_groups[key].append({
-                "id": str(hit.id),
-                "score": hit.score,
-                "content": payload.get("content", ""),
-                "contentType": payload.get("contentType", ""),
-                "appName": payload.get("appName", ""),
-                "title": payload.get("title", ""),
-                "tags": payload.get("tags", []),
-                "payload": payload,
-            })
-            total += 1
+        result_groups[key] = [_point_to_dict(hit) for hit in group.hits]
+        total += len(result_groups[key])
 
     return {
         "query": q,
@@ -514,19 +547,7 @@ async def discover(
         )
     search_ms = round((time.time() - t1) * 1000, 1)
 
-    items = []
-    for point in results.points:
-        payload = point.payload or {}
-        items.append({
-            "id": str(point.id),
-            "score": point.score,
-            "content": payload.get("content", ""),
-            "contentType": payload.get("contentType", ""),
-            "appName": payload.get("appName", ""),
-            "title": payload.get("title", ""),
-            "tags": payload.get("tags", []),
-            "payload": payload,
-        })
+    items = [_point_to_dict(p) for p in results.points]
 
     method = "discovery_api" if (positive_id and negative_id) else "recommend_api" if (positive_id or negative_id) else "basic_query"
     return {
@@ -572,17 +593,7 @@ async def recommend(
         with_payload=True,
     )
 
-    items = []
-    for point in results.points:
-        payload = point.payload or {}
-        items.append({
-            "id": str(point.id),
-            "score": point.score,
-            "content": payload.get("content", ""),
-            "contentType": payload.get("contentType", ""),
-            "appName": payload.get("appName", ""),
-            "tags": payload.get("tags", []),
-        })
+    items = [_point_to_dict(p) for p in results.points]
 
     return {
         "results": items,
@@ -623,18 +634,7 @@ async def filtered_search(
         with_payload=True,
     )
 
-    items = []
-    for point in results.points:
-        payload = point.payload or {}
-        items.append({
-            "id": str(point.id),
-            "score": point.score,
-            "content": payload.get("content", ""),
-            "contentType": payload.get("contentType", ""),
-            "appName": payload.get("appName", ""),
-            "title": payload.get("title", ""),
-            "tags": payload.get("tags", []),
-        })
+    items = [_point_to_dict(p) for p in results.points]
 
     return {"results": items, "time_ms": round((time.time() - t0) * 1000, 1)}
 
@@ -719,31 +719,12 @@ async def cognee_search(
     if not cognee_available:
         return {"error": "Cognee not installed. Run: pip install cognee cognee-community-vector-adapter-qdrant"}
 
-    import asyncio, subprocess, json as _json, sys
-
     t0 = time.time()
-    worker_path = os.path.join(BASE_DIR, "cognee_worker.py")
-    venv_python = os.path.join(BASE_DIR, "venv", "bin", "python")
-    python_exe = venv_python if os.path.exists(venv_python) else sys.executable
-
     try:
-        proc = await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: subprocess.run(
-                [python_exe, worker_path],
-                input=_json.dumps({"action": "search", "query": q, "search_type": search_type}),
-                capture_output=True, text=True, timeout=30,
-                cwd=BASE_DIR,
-            ),
+        result = await _run_cognee_worker(
+            {"action": "search", "query": q, "search_type": search_type}, timeout_s=30,
         )
-        if proc.returncode == 0:
-            result = _json.loads(proc.stdout)
-            if result.get("ok"):
-                items = result["result"]
-            else:
-                return {"error": result.get("error", "unknown"), "time_ms": round((time.time() - t0) * 1000, 1)}
-        else:
-            return {"error": f"Worker failed (rc={proc.returncode})", "time_ms": round((time.time() - t0) * 1000, 1)}
+        items = result["result"]
     except subprocess.TimeoutExpired:
         return {"error": "Cognee search timed out (30s).", "time_ms": round((time.time() - t0) * 1000, 1)}
     except Exception as e:
@@ -770,30 +751,11 @@ async def add_knowledge(request: AddKnowledgeRequest):
     if not cognee_available:
         return {"error": "Cognee not installed. Run: pip install cognee cognee-community-vector-adapter-qdrant"}
 
-    import asyncio, subprocess, json as _json, sys
-
     t0 = time.time()
-    worker_path = os.path.join(BASE_DIR, "cognee_worker.py")
-    venv_python = os.path.join(BASE_DIR, "venv", "bin", "python")
-    python_exe = venv_python if os.path.exists(venv_python) else sys.executable
 
     # Step 1: cognee.add()
     try:
-        proc = await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: subprocess.run(
-                [python_exe, worker_path],
-                input=_json.dumps({"action": "add", "text": request.text}),
-                capture_output=True, text=True, timeout=60,
-                cwd=BASE_DIR,
-            ),
-        )
-        if proc.returncode != 0:
-            err = proc.stderr[-300:] if proc.stderr else proc.stdout
-            return {"error": f"Cognee add failed: {err}", "time_ms": round((time.time() - t0) * 1000, 1)}
-        add_result = _json.loads(proc.stdout)
-        if not add_result.get("ok"):
-            return {"error": f"Cognee add error: {add_result.get('error')}", "time_ms": round((time.time() - t0) * 1000, 1)}
+        await _run_cognee_worker({"action": "add", "text": request.text}, timeout_s=60)
     except subprocess.TimeoutExpired:
         return {"error": "Cognee add timed out (60s).", "time_ms": round((time.time() - t0) * 1000, 1)}
     except Exception as e:
@@ -801,23 +763,10 @@ async def add_knowledge(request: AddKnowledgeRequest):
 
     add_ms = round((time.time() - t0) * 1000, 1)
 
-    # Step 2: cognee.cognify() — uses LLM via /v1/chat/completions
-    t1 = time.time()
+    # Step 2: cognee.cognify() — uses LLM via OpenAI gpt-4o-mini
     try:
-        proc = await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: subprocess.run(
-                [python_exe, worker_path],
-                input=_json.dumps({"action": "cognify"}),
-                capture_output=True, text=True, timeout=180,
-                cwd=BASE_DIR,
-            ),
-        )
-        if proc.returncode == 0:
-            result = _json.loads(proc.stdout)
-            cognify_status = "ok" if result.get("ok") else result.get("error", "unknown error")
-        else:
-            cognify_status = f"failed (rc={proc.returncode})"
+        await _run_cognee_worker({"action": "cognify"}, timeout_s=180)
+        cognify_status = "ok"
     except subprocess.TimeoutExpired:
         cognify_status = "timeout (180s)"
     except Exception as e:
@@ -953,7 +902,7 @@ async def chat_completions(request: ChatCompletionRequest):
         answer = get_llm_response(system_prompt, user_prompt, max_tokens=request.max_tokens)
     except Exception as e:
         logger.error(f"LLM error in /v1/chat/completions: {e}")
-        return {"error": str(e)}, 500
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
     return {
         "id": f"chatcmpl-{uuid.uuid4().hex[:12]}",

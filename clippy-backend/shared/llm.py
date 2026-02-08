@@ -11,18 +11,14 @@ Environment variables:
     LLM_MODEL_NAME  - Model name for remote mode (e.g. "distil-labs-slm")
 """
 
+import logging
 import os
-import json
 import requests
 
-# Suppress noisy ggml_metal_init bf16 "not supported" messages.
-# These are harmless — the Apple Silicon GPU simply lacks bf16 kernel
-# support but f16/f32 work perfectly via Metal.
-# GGML_LOG_LEVEL: 0=none, 1=debug, 2=info, 3=warn, 4=error
-os.environ.setdefault("GGML_LOG_LEVEL", "3")
+os.environ.setdefault("GGML_LOG_LEVEL", "4")
 
-# Optional: only import llama_cpp in local mode to keep deployed image slim
-_llama_cpp = None
+logger = logging.getLogger(__name__)
+
 _local_model = None
 _mode = None
 
@@ -37,28 +33,26 @@ def init_llm(model_paths: list[tuple[str, str]] | None = None):
     For local mode, pass a list of (path, name) tuples to try in order.
     For remote mode, no model loading needed.
     """
-    global _local_model, _llama_cpp, _mode
+    global _local_model, _mode
     _mode = _get_mode()
 
     if _mode == "remote":
-        print(f"LLM mode: remote ({os.getenv('LLM_API_URL', 'not set')})")
+        logger.info("LLM mode: remote (%s)", os.getenv("LLM_API_URL", "not set"))
         return
 
-    # Local mode: load GGUF via llama-cpp-python
     from llama_cpp import Llama
-    _llama_cpp = Llama
 
     if model_paths is None:
         model_paths = []
 
     for path, name in model_paths:
         if os.path.exists(path):
-            print(f"Loading {name} LLM from {path}...")
+            logger.info("Loading %s LLM from %s...", name, path)
             _local_model = Llama(model_path=path, n_ctx=4096, n_batch=512, verbose=False)
-            print(f"{name} LLM loaded.")
+            logger.info("%s LLM loaded.", name)
             return
 
-    print("WARNING: No LLM model found. LLM features disabled.")
+    logger.warning("No LLM model found. LLM features disabled.")
 
 
 def get_llm_response(system_prompt: str, user_prompt: str, max_tokens: int = 256) -> str:

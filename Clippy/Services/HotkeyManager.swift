@@ -1,6 +1,5 @@
 import Foundation
 import AppKit
-import Carbon
 import os
 
 @MainActor
@@ -120,5 +119,3 @@ class HotkeyManager: ObservableObject {
         isListening = false
     }
 }
-
-

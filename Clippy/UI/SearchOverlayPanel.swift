@@ -129,15 +129,7 @@ class SearchOverlayController: ObservableObject {
     }
 
     private static func simulatePaste() {
-        let source = CGEventSource(stateID: .hidSystemState)
-        if let vDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true) {
-            vDown.flags = .maskCommand
-            vDown.post(tap: .cghidEventTap)
-        }
-        if let vUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false) {
-            vUp.flags = .maskCommand
-            vUp.post(tap: .cghidEventTap)
-        }
+        PasteHelper.simulatePaste()
     }
 
     private func installClickMonitor() {

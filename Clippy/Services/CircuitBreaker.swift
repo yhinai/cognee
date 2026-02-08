@@ -63,21 +63,6 @@ actor CircuitBreaker {
         }
     }
 
-    /// Execute a closure through the circuit breaker.
-    func execute<T>(_ operation: () async throws -> T) async throws -> T {
-        guard canExecute else {
-            throw CircuitBreakerError.circuitOpen
-        }
-
-        do {
-            let result = try await operation()
-            recordSuccess()
-            return result
-        } catch {
-            recordFailure()
-            throw error
-        }
-    }
 }
 
 enum CircuitBreakerError: Error, LocalizedError {

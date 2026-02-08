@@ -164,31 +164,6 @@ class VisionScreenParser: ObservableObject {
             }
         }
         
-        // Create text recognition request for the entire image as fallback
-        let textRequest = VNRecognizeTextRequest { [weak self] request, error in
-            guard let self = self else { return }
-            
-            if let error = error {
-                completion(.failure(error))
-                return
-            }
-            
-            guard let observations = request.results as? [VNRecognizedTextObservation] else {
-                completion(.failure(VisionParserError.noTextFound))
-                return
-            }
-            
-            // Process text observations with enhanced structure analysis
-            let processedContent = self.processTextObservationsWithStructure(observations)
-            completion(.success(processedContent))
-        }
-        
-        // Configure text request
-        textRequest.recognitionLevel = recognitionLevel
-        textRequest.usesLanguageCorrection = usesLanguageCorrection
-        textRequest.customWords = customWords
-        
-        // Perform both requests
         let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
         
         do {

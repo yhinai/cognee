@@ -148,8 +148,8 @@ struct SidebarView: View {
         switch category {
         case .allItems: return allItemsForCounts.count
         case .favorites: return allItemsForCounts.filter { $0.isFavorite }.count
-        case .code: return allItemsForCounts.filter { Self.isCodeContent($0) }.count
-        case .urls: return allItemsForCounts.filter { Self.isURLContent($0) }.count
+        case .code: return allItemsForCounts.filter { $0.isCodeContent }.count
+        case .urls: return allItemsForCounts.filter { $0.isURLContent }.count
         case .images: return allItemsForCounts.filter { $0.contentType == "image" }.count
         case .sensitive: return allItemsForCounts.filter { $0.isSensitive }.count
         }
@@ -165,19 +165,6 @@ struct SidebarView: View {
             }
         }
         return appCounts.sorted { $0.value > $1.value }.prefix(3).map { $0.key }
-    }
-
-    static func isCodeContent(_ item: Item) -> Bool {
-        if item.contentType == "code" { return true }
-        let codeKeywords = ["func ", "class ", "struct ", "import ", "var ", "let ", "def ", "return "]
-        let hasKeywords = codeKeywords.contains(where: { item.content.contains($0) })
-        let hasBraces = item.content.contains("{") && item.content.contains("}")
-        return hasKeywords && hasBraces
-    }
-
-    static func isURLContent(_ item: Item) -> Bool {
-        let trimmed = item.content.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.hasPrefix("http://") || trimmed.hasPrefix("https://")
     }
 
 }

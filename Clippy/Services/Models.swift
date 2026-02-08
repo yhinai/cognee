@@ -1,5 +1,7 @@
+import AppKit
 import Foundation
 import SwiftData
+import SwiftUI
 
 // MARK: - AI Service Type
 
@@ -127,6 +129,71 @@ enum ClippyAnimationState {
             return "Done!"
         case .error:
             return "Oops! Something went wrong"
+        }
+    }
+}
+
+// MARK: - Item Helpers (shared across views)
+
+extension Item {
+    var isCodeContent: Bool {
+        if contentType == "code" { return true }
+        let codeKeywords = ["func ", "class ", "struct ", "import ", "var ", "let ", "def ", "return "]
+        let hasKeywords = codeKeywords.contains(where: { content.contains($0) })
+        let hasBraces = content.contains("{") && content.contains("}")
+        return hasKeywords && hasBraces
+    }
+
+    var isURLContent: Bool {
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.hasPrefix("http://") || trimmed.hasPrefix("https://")
+    }
+
+    var iconSystemName: String {
+        if isSensitive { return "lock.fill" }
+        if isCodeContent { return "chevron.left.forwardslash.chevron.right" }
+        if isURLContent { return "link" }
+        switch contentType {
+        case "image": return "photo"
+        case "code": return "chevron.left.forwardslash.chevron.right"
+        default: return "doc.text"
+        }
+    }
+
+    var iconGradient: LinearGradient {
+        if isSensitive {
+            return LinearGradient(colors: [.orange, .red], startPoint: .topLeading, endPoint: .bottomTrailing)
+        }
+        if isCodeContent {
+            return LinearGradient(colors: [.purple, .indigo], startPoint: .topLeading, endPoint: .bottomTrailing)
+        }
+        if isURLContent {
+            return LinearGradient(colors: [.teal, .cyan], startPoint: .topLeading, endPoint: .bottomTrailing)
+        }
+        switch contentType {
+        case "image":
+            return LinearGradient(colors: [.blue, .cyan], startPoint: .topLeading, endPoint: .bottomTrailing)
+        case "code":
+            return LinearGradient(colors: [.purple, .indigo], startPoint: .topLeading, endPoint: .bottomTrailing)
+        default:
+            return LinearGradient(colors: [.blue, .indigo], startPoint: .topLeading, endPoint: .bottomTrailing)
+        }
+    }
+}
+
+// MARK: - Shared Utilities
+
+enum PasteHelper {
+    /// Simulate Cmd+V via CGEvent (used by search overlay and content view).
+    static func simulatePaste() {
+        let source = CGEventSource(stateID: .hidSystemState)
+        if let vDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true) {
+            vDown.flags = .maskCommand
+            vDown.post(tap: .cghidEventTap)
+        }
+        if let vUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false) {
+            vUp.flags = .maskCommand
+            vUp.post(tap: .cghidEventTap)
         }
     }
 }

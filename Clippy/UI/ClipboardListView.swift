@@ -169,8 +169,8 @@ struct ClipboardListView: View {
         switch category {
         case .allItems: return allItems
         case .favorites: return allItems.filter { $0.isFavorite }
-        case .code: return allItems.filter { SidebarView.isCodeContent($0) }
-        case .urls: return allItems.filter { SidebarView.isURLContent($0) }
+        case .code: return allItems.filter { $0.isCodeContent }
+        case .urls: return allItems.filter { $0.isURLContent }
         case .images: return allItems.filter { $0.contentType == "image" }
         case .sensitive: return allItems.filter { $0.isSensitive }
         }
@@ -285,7 +285,6 @@ struct ClipboardListView: View {
     }
 }
 
-
 // MARK: - Clipboard Item Row
 
 struct ClipboardItemRow: View {
@@ -294,8 +293,8 @@ struct ClipboardItemRow: View {
     var isCopied: Bool = false
     @State private var isHovering = false
 
-    private var isCode: Bool { SidebarView.isCodeContent(item) }
-    private var isURL: Bool { SidebarView.isURLContent(item) }
+    private var isCode: Bool { item.isCodeContent }
+    private var isURL: Bool { item.isURLContent }
 
     private var urlDomain: String? {
         guard isURL else { return nil }
@@ -429,25 +428,7 @@ struct ClipboardItemRow: View {
         }
     }
 
-    private var richIconGradient: LinearGradient {
-        if item.isSensitive {
-            return LinearGradient(colors: [.orange, .red], startPoint: .topLeading, endPoint: .bottomTrailing)
-        }
-        if isCode {
-            return LinearGradient(colors: [.purple, .indigo], startPoint: .topLeading, endPoint: .bottomTrailing)
-        }
-        if isURL {
-            return LinearGradient(colors: [.teal, .cyan], startPoint: .topLeading, endPoint: .bottomTrailing)
-        }
-        switch item.contentType {
-        case "image":
-            return LinearGradient(colors: [.blue, .cyan], startPoint: .topLeading, endPoint: .bottomTrailing)
-        case "code":
-            return LinearGradient(colors: [.purple, .indigo], startPoint: .topLeading, endPoint: .bottomTrailing)
-        default:
-            return LinearGradient(colors: [.blue, .indigo], startPoint: .topLeading, endPoint: .bottomTrailing)
-        }
-    }
+    private var richIconGradient: LinearGradient { item.iconGradient }
 
     private static let relativeFormatter: RelativeDateTimeFormatter = {
         let f = RelativeDateTimeFormatter()

@@ -84,14 +84,12 @@ class AudioRecorder: NSObject, ObservableObject {
     @Published var isRecording = false
     
     func startRecording() -> URL? {
-        if #available(macOS 10.14, *) {
-            switch AVCaptureDevice.authorizationStatus(for: .audio) {
-            case .authorized: break
-            case .notDetermined:
-                AVCaptureDevice.requestAccess(for: .audio) { _ in }
-            case .denied, .restricted: return nil
-            @unknown default: return nil
-            }
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized: break
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .audio) { _ in }
+        case .denied, .restricted: return nil
+        @unknown default: return nil
         }
 
         let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent("clippy_voice.m4a")

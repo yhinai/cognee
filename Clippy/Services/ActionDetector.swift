@@ -112,13 +112,9 @@ class ActionDetector {
                 }
                 
             case .address:
-                if let addressKeys = match.components {
-                    // Reconstruct address or use substring
-                    // NSDataDetector usually gives range
-                    if let range = Range(match.range, in: text) {
-                        let addressString = String(text[range])
-                        actions.append(.openMaps(addressString))
-                    }
+                if match.components != nil, let range = Range(match.range, in: text) {
+                    let addressString = String(text[range])
+                    actions.append(.openMaps(addressString))
                 }
                 
             case .phoneNumber:

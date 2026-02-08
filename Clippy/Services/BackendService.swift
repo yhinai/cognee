@@ -148,10 +148,6 @@ struct BackendExtractEntitiesResponse: Codable {
     let total: Int
 }
 
-struct BackendCollectionsResponse: Codable {
-    // Dynamic keys — decoded manually
-}
-
 // MARK: - Backend Service
 
 /// HTTP client for the Clippy Python backend (Cognee + Qdrant + Distil Labs SLM).

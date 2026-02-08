@@ -24,8 +24,6 @@
 	<string>Clippy requires accessibility access to monitor clipboard changes, detect cursor position, and provide contextual suggestions based on your current activity.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Clippy requires microphone access to listen to your voice commands for querying your clipboard history.</string>
-	<key>NSCameraUsageDescription</key>
-	<string>Clippy requires camera access for visual features.</string>
 	<key>NSScreenCaptureUsageDescription</key>
 	<string>Clippy requires screen recording access to capture screen content for OCR text extraction when you press Option+V.</string>
 	<key>NSHumanReadableCopyright</key>

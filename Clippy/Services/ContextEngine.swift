@@ -5,7 +5,7 @@ import ApplicationServices
 /// ContextEngine handles all Accessibility (AX) framework interactions.
 /// Extracts window titles, focused elements, and builds rich context for AI queries.
 @MainActor
-class ContextEngine: ObservableObject, ContextProviding {
+class ContextEngine: ObservableObject {
     @Published var currentAppName: String = "Unknown"
     @Published var currentWindowTitle: String = ""
     @Published var accessibilityContext: String = ""

@@ -170,7 +170,7 @@ class QueryOrchestrator: ObservableObject {
                 let backendUp = backendService?.isBackendAvailable ?? false
                 errorMessage = backendUp
                     ? "Backend returned no response — check backend logs"
-                    : "Backend is offline — start with ./start.sh"
+                    : "Backend is offline — start with ./run.sh"
             } else {
                 errorMessage = nil
             }

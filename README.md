@@ -20,7 +20,7 @@
 
 ![Clippy Demo](https://img.shields.io/badge/📎-Meet_Your_Smart_Assistant-4A90E2?style=for-the-badge)
 
-[![Built with TRAE IDE](https://img.shields.io/badge/🤖_Built_with-TRAE_IDE-FF6B6B?style=for-the-badge&logo=androidstudio&logoColor=white)](https://trae.ai)
+[![Built with Cursor](https://img.shields.io/badge/Built_with-Cursor-000000?style=for-the-badge&logo=data:image/svg+xml;base64,&logoColor=white)](https://cursor.com)
 
 </div>
 
@@ -142,7 +142,7 @@
 </div>
 
 - **Floating Window** - Follows your cursor and text input
-- **Animated States** - 23 different GIF animations
+- **Animated States** - 4 GIF animations (idle, thinking, writing, done)
 - **Speech Bubbles** - Friendly feedback and tips
 - **Non-Intrusive** - Press ESC to dismiss anytime
 - **Smart Positioning** - Avoids notch and screen edges
@@ -176,7 +176,7 @@
 
 ### Development Tools
 
-[![TRAE IDE](https://img.shields.io/badge/TRAE_IDE-AI_Development-FF6B6B?style=for-the-badge&logo=androidstudio&logoColor=white)](https://trae.ai)
+[![Cursor](https://img.shields.io/badge/Cursor-AI_IDE-000000?style=for-the-badge&logo=data:image/svg+xml;base64,&logoColor=white)](https://cursor.com)
 [![Xcode](https://img.shields.io/badge/Xcode-16.0+-1575F9?style=for-the-badge&logo=xcode&logoColor=white)](https://developer.apple.com/xcode/)
 
 </div>
@@ -263,27 +263,42 @@
 
 ![macOS](https://img.shields.io/badge/macOS-15.0+-000000?style=flat&logo=apple&logoColor=white)
 ![Xcode](https://img.shields.io/badge/Xcode-16.0+-1575F9?style=flat&logo=xcode&logoColor=white)
-![Swift](https://img.shields.io/badge/Swift-5.0+-FA7343?style=flat&logo=swift&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.12+-3776AB?style=flat&logo=python&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Desktop-2496ED?style=flat&logo=docker&logoColor=white)
 
-### Installation Steps
+### Installation
 
 ```bash
 # Clone the repository
-git clone https://github.com/yhinai/clippy.git
-cd clippy
+git clone https://github.com/yhinai/cognee.git clippy-ai
+cd clippy-ai
 
-# Open in Xcode
-open Clippy.xcodeproj
+# Download GGUF models (nomic-embed-text, Distil Labs SLM, Qwen3-4B)
+./run.sh --download
 
-# Build and run
-# Press Cmd+R or click the Play button in Xcode
+# Configure Cognee's OpenAI key (for knowledge graph extraction)
+nano clippy-backend/.env
+
+# Launch everything: Docker → Qdrant → Backend → Clippy.app
+./run.sh
+```
+
+### run.sh Commands
+
+```bash
+./run.sh                # Launch all: Docker, Qdrant, backend, Clippy.app
+./run.sh --debug        # Launch all + run Clippy.app with visible logs
+./run.sh --test         # Launch services + run 10-endpoint pipeline test
+./run.sh --no-app       # Backend services only, skip Swift build
+./run.sh --download     # Download GGUF models
+./run.sh --build        # Build and launch Clippy.app only
+./run.sh --stop         # Stop all services
 ```
 
 ### First Launch
 
-1. **Enable Accessibility** - System Settings → Privacy & Security → Accessibility
-2. **Add API Key** - Configure Gemini 3 Pro or install LM Studio for local AI
-3. **Start Copying** - Use `Option+X` to ask questions about your clipboard
+1. **Enable Accessibility** - System Settings → Privacy & Security → Accessibility → enable Clippy
+2. **Start Copying** - Use `Option+X` to ask questions about your clipboard
 
 ---
 
@@ -502,31 +517,20 @@ Result: Your text replaced with answer automatically!
 ## Project Structure
 
 ```
-Clippy/
-├── App/                    # Entry point
-│   └── ClippyApp.swift
-├── Services/               # All business logic (15 files)
-│   ├── AppDependencyContainer.swift
-│   ├── Models.swift
-│   ├── ClipboardMonitor.swift  # + ClipboardService
-│   ├── ClipboardRepository.swift
-│   ├── ContextEngine.swift
-│   ├── GeminiService.swift
-│   ├── LocalAIService.swift    # Native MLXLLM
-│   ├── ElevenLabsService.swift # + AudioRecorder
-│   ├── HotkeyManager.swift
-│   ├── TextCaptureService.swift
-│   └── VisionScreenParser.swift
-├── UI/                     # All views (5 files)
-│   ├── ContentView.swift
-│   ├── ClipboardListView.swift
-│   ├── ClipboardDetailView.swift  # + FlowLayout
-│   ├── ClippyWindowController.swift # + ClippyGifPlayer
-│   └── SidebarView.swift
-└── Resources/              # GIF animations
+clippy-ai/
+├── Clippy/
+│   ├── App/                    # Entry point, URL scheme handler
+│   ├── Services/               # 30 files: AI providers, clipboard, context, hotkeys, backend
+│   ├── UI/                     # 10 files: views, search overlay, settings, onboarding
+│   └── Resources/              # GIF animations
+├── ClippyTests/                # 9 test files
+├── clippy-backend/
+│   ├── app.py                  # FastAPI server (all endpoints)
+│   ├── cognee_worker.py        # Subprocess worker for Cognee operations
+│   └── shared/                 # Embedding + LLM abstractions (local/remote)
+├── run.sh                      # Single entry point (launch, build, download, test, stop)
+└── docker-compose.yml          # Qdrant vector database service
 ```
-
-**8 directories, 28 files, ~5,100 lines**
 
 
 ---
@@ -599,11 +603,9 @@ Special thanks to:
 
 [![Apple](https://img.shields.io/badge/Apple-SwiftUI_&_Vision-000000?style=for-the-badge&logo=apple&logoColor=white)](https://developer.apple.com)
 [![Google](https://img.shields.io/badge/Google-Gemini_3_Pro-8E44AD?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev/)
-[![VecturaKit](https://img.shields.io/badge/VecturaKit-Vector_Search-9C27B0?style=for-the-badge&logo=github&logoColor=white)](https://github.com/VecturaMLX)
+[![Qdrant](https://img.shields.io/badge/Qdrant-Vector_Search-DC382D?style=for-the-badge&logo=data:image/svg+xml;base64,&logoColor=white)](https://qdrant.tech)
+[![Cognee](https://img.shields.io/badge/Cognee-Knowledge_Graph-6C63FF?style=for-the-badge&logo=data:image/svg+xml;base64,&logoColor=white)](https://cognee.ai)
 [![Microsoft](https://img.shields.io/badge/Microsoft-Original_Clippy-0078D4?style=for-the-badge&logo=microsoft&logoColor=white)](https://microsoft.com)
-[![TRAE IDE](https://img.shields.io/badge/TRAE_IDE-AI_Development-FF6B6B?style=for-the-badge&logo=androidstudio&logoColor=white)](https://trae.ai)
-
-### 🛠️ Built with TRAE IDE - The AI-Powered Development Environment
 
 </div>
 
@@ -635,14 +637,14 @@ See how AI-powered clipboard management transforms your workflow with natural la
 
 ---
 
-### Built with ❤️ and nostalgia using TRAE IDE
+### Built with ❤️ and nostalgia
 
 **Clippy is back, and he's smarter than ever!**
 
 ![Clippy](https://img.shields.io/badge/📎-I_See_You're_Writing_Something-4A90E2?style=for-the-badge)
 ![AI](https://img.shields.io/badge/🤖-Would_You_Like_Help_With_That?-8E44AD?style=for-the-badge)
 
-**Powered by macOS | Gemini 3 Pro | Apple Vision | TRAE IDE**
+**Powered by macOS | Cognee | Qdrant | Distil Labs SLM | Apple Vision**
 
 [![⬆ Back to Top](#-clippy---ai-powered-clipboard-manager)](https://github.com/yhinai/clippy#readme)
 

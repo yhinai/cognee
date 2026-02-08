@@ -85,46 +85,6 @@ final class CircuitBreakerTests: XCTestCase {
         XCTAssertEqual(String(describing: state), "closed")
     }
 
-    // MARK: - Execute Method
-
-    func testExecuteSucceeds() async throws {
-        let cb = CircuitBreaker(name: "test", failureThreshold: 3, resetTimeout: 60)
-        let result = try await cb.execute { return 42 }
-        XCTAssertEqual(result, 42)
-    }
-
-    func testExecuteThrowsWhenOpen() async {
-        let cb = CircuitBreaker(name: "test", failureThreshold: 1, resetTimeout: 60)
-        await cb.recordFailure()
-
-        do {
-            _ = try await cb.execute { return 42 }
-            XCTFail("Should have thrown")
-        } catch {
-            XCTAssertTrue(error is CircuitBreakerError)
-        }
-    }
-
-    func testExecuteRecordsFailureOnThrow() async {
-        let cb = CircuitBreaker(name: "test", failureThreshold: 2, resetTimeout: 60)
-
-        do {
-            _ = try await cb.execute { () -> Int in throw CircuitBreakerError.circuitOpen }
-        } catch {}
-
-        // One failure recorded, still should be able to execute
-        let canExecute = await cb.canExecute
-        XCTAssertTrue(canExecute)
-
-        do {
-            _ = try await cb.execute { () -> Int in throw CircuitBreakerError.circuitOpen }
-        } catch {}
-
-        // Two failures, circuit should be open now
-        let canExecuteAfter = await cb.canExecute
-        XCTAssertFalse(canExecuteAfter)
-    }
-
     // MARK: - Error
 
     func testCircuitBreakerErrorDescription() {

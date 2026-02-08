@@ -1,7 +1,6 @@
 import SwiftUI
 import AppKit
 import ApplicationServices
-import ImageIO
 import os
 
 class ClippyWindowController: ObservableObject {
@@ -125,9 +124,7 @@ class ClippyWindowController: ObservableObject {
             self.animationResetID = UUID()
         }
     }
-    
 
-    
     private func createWindow() {
         // Create the hosting controller
         // Initial view is empty/placeholder until show() is called
@@ -219,141 +216,7 @@ class ClippyWindowController: ObservableObject {
         guard let window = window else { return }
         positionWindowCentered(window)
     }
-    
-    /// Get the frame (position and size) of the currently focused text input element
-    private func getActiveTextInputFrame() -> NSRect? {
-        guard AXIsProcessTrusted() else {
-            Logger.ui.warning("Accessibility permission not granted")
-            return nil
-        }
-        
-        guard let frontmostApp = NSWorkspace.shared.frontmostApplication else {
-            Logger.ui.warning("No frontmost application")
-            return nil
-        }
-        
-        let appElement = AXUIElementCreateApplication(frontmostApp.processIdentifier)
-        var focusedElementRef: CFTypeRef?
-        let result = AXUIElementCopyAttributeValue(appElement, kAXFocusedUIElementAttribute as CFString, &focusedElementRef)
-        
-        guard result == AXError.success, let focusedElement = focusedElementRef else {
-            Logger.ui.warning("Unable to locate focused UI element")
-            return nil
-        }
-        
-        let focusedUIElement = focusedElement as! AXUIElement
 
-        // Check if the focused element is a text input (text field, text area, etc.)
-        if !isTextInputElement(focusedUIElement) {
-            Logger.ui.debug("Focused element is not a text input")
-            return nil
-        }
-        
-        // Try to get the exact caret position first
-        if let caretFrame = getCaretPosition(focusedUIElement) {
-            Logger.ui.debug("Found caret at: \(caretFrame.debugDescription, privacy: .public)")
-            return caretFrame
-        }
-        
-        // Fallback to text field bounds if caret position is not available
-        guard let position = getElementPosition(focusedUIElement),
-              let size = getElementSize(focusedUIElement) else {
-            Logger.ui.warning("Unable to get text input position/size")
-            return nil
-        }
-        
-        let frame = NSRect(x: position.x, y: position.y, width: size.width, height: size.height)
-        Logger.ui.debug("Found text input at: \(frame.debugDescription, privacy: .public) (fallback to field bounds)")
-        return frame
-    }
-    
-    /// Check if the given accessibility element is a text input
-    private func isTextInputElement(_ element: AXUIElement) -> Bool {
-        var roleRef: CFTypeRef?
-        let roleResult = AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &roleRef)
-        
-        guard roleResult == AXError.success, let role = roleRef as? String else {
-            return false
-        }
-        
-        // Common text input roles
-        let textInputRoles = [
-            kAXTextFieldRole,
-            kAXTextAreaRole,
-            kAXComboBoxRole
-        ]
-        
-        return textInputRoles.contains { $0 as String == role }
-    }
-    
-    /// Get the position of an accessibility element
-    private func getElementPosition(_ element: AXUIElement) -> NSPoint? {
-        var positionRef: CFTypeRef?
-        let result = AXUIElementCopyAttributeValue(element, kAXPositionAttribute as CFString, &positionRef)
-        
-        guard result == AXError.success, let ref = positionRef else {
-            return nil
-        }
-        let positionValue = ref as! AXValue
-
-        var point = NSPoint()
-        let success = AXValueGetValue(positionValue, .cgPoint, &point)
-        return success ? point : nil
-    }
-    
-    /// Get the size of an accessibility element
-    private func getElementSize(_ element: AXUIElement) -> NSSize? {
-        var sizeRef: CFTypeRef?
-        let result = AXUIElementCopyAttributeValue(element, kAXSizeAttribute as CFString, &sizeRef)
-        
-        guard result == AXError.success, let ref = sizeRef else {
-            return nil
-        }
-        let sizeValue = ref as! AXValue
-
-        var size = NSSize()
-        let success = AXValueGetValue(sizeValue, .cgSize, &size)
-        return success ? size : nil
-    }
-    
-    /// Get the exact position of the text caret/cursor
-    private func getCaretPosition(_ element: AXUIElement) -> NSRect? {
-        // First, get the selected text range (which indicates the caret position)
-        var selectedRangeRef: CFTypeRef?
-        let rangeResult = AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &selectedRangeRef)
-        
-        guard rangeResult == AXError.success, let selectedRangeValue = selectedRangeRef else {
-            Logger.ui.warning("Unable to get selected text range")
-            return nil
-        }
-        
-        // Get the bounds for the selected range (caret position)
-        var caretBoundsRef: CFTypeRef?
-        let boundsResult = AXUIElementCopyParameterizedAttributeValue(
-            element,
-            kAXBoundsForRangeParameterizedAttribute as CFString,
-            selectedRangeValue,
-            &caretBoundsRef
-        )
-        
-        guard boundsResult == AXError.success, let ref = caretBoundsRef else {
-            Logger.ui.warning("Unable to get caret bounds")
-            return nil
-        }
-        let caretBoundsValue = ref as! AXValue
-
-        var caretBounds = CGRect()
-        let success = AXValueGetValue(caretBoundsValue, .cgRect, &caretBounds)
-        
-        if success {
-            // Convert CGRect to NSRect and return
-            return NSRect(x: caretBounds.origin.x, y: caretBounds.origin.y, width: max(caretBounds.width, 2), height: caretBounds.height)
-        } else {
-            Logger.ui.warning("Failed to extract caret bounds from AXValue")
-            return nil
-        }
-    }
-    
     /// Position the clippy window in the top-right area of the screen, away from the notch
     private func positionWindowCentered(_ window: NSWindow) {
         guard let screen = NSScreen.main else { return }

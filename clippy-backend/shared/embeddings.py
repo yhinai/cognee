@@ -11,11 +11,13 @@ Environment variables:
     EMBED_MODEL_NAME - Model name for remote mode (default: nomic-embed-text)
 """
 
+import logging
 import os
 import requests
 
-# Suppress noisy ggml_metal_init bf16 "not supported" messages
-os.environ.setdefault("GGML_LOG_LEVEL", "3")
+os.environ.setdefault("GGML_LOG_LEVEL", "4")
+
+logger = logging.getLogger(__name__)
 
 _local_model = None
 _mode = None
@@ -31,12 +33,12 @@ def init_embeddings(model_path: str | None = None):
     _mode = _get_mode()
 
     if _mode == "remote":
-        print(f"Embedding mode: remote ({os.getenv('EMBED_API_URL', 'not set')})")
+        logger.info("Embedding mode: remote (%s)", os.getenv("EMBED_API_URL", "not set"))
         return
 
     from llama_cpp import Llama
     if model_path and os.path.exists(model_path):
-        print("Loading nomic-embed-text model...")
+        logger.info("Loading nomic-embed-text model...")
         _local_model = Llama(
             model_path=model_path,
             embedding=True,
@@ -44,9 +46,9 @@ def init_embeddings(model_path: str | None = None):
             n_batch=512,
             verbose=False,
         )
-        print("Embedding model loaded.")
+        logger.info("Embedding model loaded.")
     else:
-        print(f"WARNING: Embedding model not found at {model_path}")
+        logger.warning("Embedding model not found at %s", model_path)
 
 
 def get_embedding(text: str) -> list[float]:

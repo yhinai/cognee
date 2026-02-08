@@ -220,30 +220,13 @@ struct StatusBarItemRow: View {
         return String(text.prefix(50)).replacingOccurrences(of: "\n", with: " ")
     }
 
-    private var iconName: String {
-        if item.isSensitive { return "lock.fill" }
-        switch item.contentType {
-        case "image": return "photo"
-        case "code": return "chevron.left.forwardslash.chevron.right"
-        default: return "doc.text"
-        }
-    }
+    private var iconName: String { item.iconSystemName }
 
     private var iconGradient: LinearGradient {
         if isCopied {
             return LinearGradient(colors: [.green, .mint], startPoint: .topLeading, endPoint: .bottomTrailing)
         }
-        if item.isSensitive {
-            return LinearGradient(colors: [.orange, .red], startPoint: .topLeading, endPoint: .bottomTrailing)
-        }
-        switch item.contentType {
-        case "image":
-            return LinearGradient(colors: [.blue, .cyan], startPoint: .topLeading, endPoint: .bottomTrailing)
-        case "code":
-            return LinearGradient(colors: [.purple, .indigo], startPoint: .topLeading, endPoint: .bottomTrailing)
-        default:
-            return LinearGradient(colors: [.blue, .indigo], startPoint: .topLeading, endPoint: .bottomTrailing)
-        }
+        return item.iconGradient
     }
 
     private static let relativeFormatter: RelativeDateTimeFormatter = {

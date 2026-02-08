@@ -250,8 +250,6 @@ class TextCaptureService: ObservableObject {
             vUp.post(tap: .cghidEventTap)
         }
     }
-    
-
 
     /// Replace the captured text with the AI answer in the original text field
     func replaceCapturedTextWithAnswer(_ answer: String) {

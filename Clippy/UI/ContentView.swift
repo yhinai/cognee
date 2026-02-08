@@ -502,13 +502,7 @@ struct ContentView: View {
     }
     
     private func simulatePaste() {
-        let source = CGEventSource(stateID: .hidSystemState)
-        let vKeyDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true)
-        let vKeyUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false)
-        vKeyDown?.flags = .maskCommand
-        vKeyUp?.flags = .maskCommand
-        vKeyDown?.post(tap: .cghidEventTap)
-        vKeyUp?.post(tap: .cghidEventTap)
+        PasteHelper.simulatePaste()
     }
     
     // MARK: - API Key Helpers

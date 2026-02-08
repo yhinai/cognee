@@ -26,9 +26,13 @@ venv/
 
 # Environment & Config
 .env
+*/.env
 local.env
 .env.local
 .env.*.local
+
+# IDE
+.cursor/
 
 # macOS
 .DS_Store
@@ -42,8 +46,10 @@ models/
 # Cognee data
 .cognee_data/
 
-# Temporary & Test
+# Xcode
+*.xcresult
+
+# Temporary
 tmp/
 temp/
 *.tmp
-cognee-qdrant-starter/

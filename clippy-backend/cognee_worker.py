@@ -86,21 +86,18 @@ def _configure_cognee():
 
 async def do_add(text: str, dataset_name: str = "main_dataset") -> dict:
     """Add text to Cognee."""
-    _configure_cognee()
     await cognee.add(text, dataset_name=dataset_name)
     return {"status": "ok"}
 
 
 async def do_cognify() -> dict:
     """Run Cognee's cognify pipeline (LLM-based knowledge graph extraction)."""
-    _configure_cognee()
     await cognee.cognify()
     return {"status": "ok"}
 
 
 async def do_search(query: str, search_type: str = "CHUNKS") -> list:
     """Search Cognee knowledge graph."""
-    _configure_cognee()
     from cognee.api.v1.search import SearchType
 
     st = getattr(SearchType, search_type.upper(), SearchType.CHUNKS)
@@ -110,7 +107,6 @@ async def do_search(query: str, search_type: str = "CHUNKS") -> list:
 
 async def do_prune() -> dict:
     """Reset all Cognee data."""
-    _configure_cognee()
     await cognee.prune.prune_data()
     await cognee.prune.prune_system(metadata=True)
     return {"pruned": True}
@@ -119,6 +115,8 @@ async def do_prune() -> dict:
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
+    _configure_cognee()
+
     raw = sys.stdin.read().strip()
     if not raw:
         print(json.dumps({"ok": False, "error": "No input"}))

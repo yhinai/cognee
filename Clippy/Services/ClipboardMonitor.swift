@@ -6,7 +6,7 @@ import os
 /// ClipboardMonitor: Thin orchestrator for clipboard events.
 /// Delegates context to ContextEngine, ingestion to Repository.
 @MainActor
-class ClipboardMonitor: ObservableObject, ClipboardMonitoring {
+class ClipboardMonitor: ObservableObject {
     @Published var clipboardContent: String = ""
     @Published var isMonitoring: Bool = false
 
@@ -33,13 +33,7 @@ class ClipboardMonitor: ObservableObject, ClipboardMonitoring {
     var currentWindowTitle: String { contextEngine?.currentWindowTitle ?? "" }
     var hasAccessibilityPermission: Bool { contextEngine?.hasAccessibilityPermission ?? false }
     var accessibilityContext: String { contextEngine?.accessibilityContext ?? "" }
-    
-    var permissionStatusMessage: String {
-        hasAccessibilityPermission
-            ? "Accessibility permission granted"
-            : "Limited mode: grant Accessibility for richer context"
-    }
-    
+
     // MARK: - Lifecycle
     
     func startMonitoring(
