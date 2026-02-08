@@ -643,9 +643,12 @@ async def ask(
     t1 = time.time()
     try:
         answer = get_llm_response(
-            "You are Clippy, a helpful clipboard assistant. Answer in 1-2 sentences using ONLY the "
-            "provided context. Give the direct answer — no preamble, no repeating the question.",
-            f"Context from clipboard history:\n{context}\n\nQuestion: {q}\n\nAnswer concisely:",
+            "You are Clippy, a helpful assistant answering questions about the USER. "
+            "The context below is from the USER's clipboard history — it is THEIR data. "
+            "Always respond in second person: say 'Your name is...', 'You were working on...', etc. "
+            "NEVER say 'My name is...' or 'I was working on...'. "
+            "Answer in 1-2 sentences using ONLY the provided context. Be direct.",
+            f"The user's clipboard history:\n{context}\n\nThe user asks: {q}\n\nAnswer about the user:",
             max_tokens=150,
         )
     except Exception as e:
