@@ -127,6 +127,44 @@ _ENTITY_PATTERNS = [
 ]
 
 
+def _fix_perspective(text: str) -> str:
+    """Fix first-person pronouns to second-person in LLM answers.
+    Small local models often ignore the 'use second person' instruction."""
+    import re
+    # Order matters: longer phrases first to avoid partial replacements
+    replacements = [
+        (r'\bI was\b', 'You were'),
+        (r'\bI am\b', 'You are'),
+        (r'\bI have\b', 'You have'),
+        (r'\bI had\b', 'You had'),
+        (r'\bI\'m\b', "You're"),
+        (r'\bI\'ve\b', "You've"),
+        (r'\bI\'d\b', "You'd"),
+        (r'\bI\'ll\b', "You'll"),
+        (r'\bI will\b', 'You will'),
+        (r'\bI can\b', 'You can'),
+        (r'\bI could\b', 'You could'),
+        (r'\bI would\b', 'You would'),
+        (r'\bI should\b', 'You should'),
+        (r'\bI need\b', 'You need'),
+        (r'\bI want\b', 'You want'),
+        (r'\bI did\b', 'You did'),
+        (r'\bI do\b', 'You do'),
+        (r'\bmy\b', 'your'),
+        (r'\bMy\b', 'Your'),
+        (r'\bmine\b', 'yours'),
+        (r'\bmyself\b', 'yourself'),
+    ]
+    # Only replace "I" as a standalone word at the start of a sentence or after punctuation
+    # to avoid replacing "I" inside words
+    for pattern, replacement in replacements:
+        text = re.sub(pattern, replacement, text)
+    # Standalone "I " at sentence start
+    text = re.sub(r'(?<=[.!?]\s)I\b', 'You', text)
+    text = re.sub(r'^I\b', 'You', text)
+    return text
+
+
 def extract_entities(text: str) -> list[dict]:
     """Extract general-purpose entities from text using regex patterns."""
     entities = []
@@ -643,14 +681,17 @@ async def ask(
     t1 = time.time()
     try:
         answer = get_llm_response(
-            "You are Clippy, a helpful assistant answering questions about the USER. "
-            "The context below is from the USER's clipboard history — it is THEIR data. "
-            "Always respond in second person: say 'Your name is...', 'You were working on...', etc. "
-            "NEVER say 'My name is...' or 'I was working on...'. "
-            "Answer in 1-2 sentences using ONLY the provided context. Be direct.",
-            f"The user's clipboard history:\n{context}\n\nThe user asks: {q}\n\nAnswer about the user:",
-            max_tokens=150,
+            "You are a clipboard search assistant. Rules:\n"
+            "- Answer ONLY using the context provided below.\n"
+            "- Reply with JUST the answer in one short sentence. No commentary, no corrections, no extra explanation.\n"
+            "- Refer to the user as 'you/your' (second person). Never use 'I/my'.\n"
+            "- If asked for a specific value (name, number, URL), return ONLY that value.\n"
+            "- Do NOT mention yourself or your role.",
+            f"Context:\n{context}\n\nQuestion: {q}",
+            max_tokens=80,
         )
+        # Fix first-person → second-person (small models often ignore this instruction)
+        answer = _fix_perspective(answer)
     except Exception as e:
         answer = f"LLM error: {e}"
     llm_ms = round((time.time() - t1) * 1000, 1)
