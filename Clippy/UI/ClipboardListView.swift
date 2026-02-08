@@ -1,5 +1,5 @@
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 struct ClipboardListView: View {
     @Binding var selectedItems: Set<PersistentIdentifier>
@@ -136,8 +136,11 @@ struct ClipboardListView: View {
         searchTask?.cancel()
 
         guard !newValue.isEmpty else {
-            searchResults = []
-            isSearching = false
+            // Defer state change to avoid reentrant table view operation
+            DispatchQueue.main.async {
+                self.searchResults = []
+                self.isSearching = false
+            }
             return
         }
 
@@ -152,9 +155,10 @@ struct ClipboardListView: View {
 
             let ids = results.map { $0.0 }
 
-            await MainActor.run {
-                if Task.isCancelled { return }
-                let foundItems = allItems.filter { ids.contains($0.vectorId ?? UUID()) }
+            // Defer state change to next run loop to avoid reentrant table view operation
+            DispatchQueue.main.async {
+                guard !Task.isCancelled else { return }
+                let foundItems = self.allItems.filter { ids.contains($0.vectorId ?? UUID()) }
                 self.searchResults = ids.compactMap { id in
                     foundItems.first(where: { $0.vectorId == id })
                 }

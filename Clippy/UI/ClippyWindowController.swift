@@ -1,6 +1,6 @@
-import SwiftUI
 import AppKit
 import ApplicationServices
+import SwiftUI
 import os
 
 class ClippyWindowController: ObservableObject {

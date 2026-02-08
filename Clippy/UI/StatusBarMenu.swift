@@ -1,5 +1,5 @@
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 struct StatusBarMenu: View {
     @Query(sort: \Item.timestamp, order: .reverse, animation: .default)

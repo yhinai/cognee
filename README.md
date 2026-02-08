@@ -277,7 +277,7 @@ cd clippy-ai
 ./run.sh --download
 
 # Configure Cognee's OpenAI key (for knowledge graph extraction)
-nano clippy-backend/.env
+nano backend/.env
 
 # Launch everything: Docker → Qdrant → Backend → Clippy.app
 ./run.sh
@@ -518,18 +518,26 @@ Result: Your text replaced with answer automatically!
 
 ```
 clippy-ai/
-├── Clippy/
-│   ├── App/                    # Entry point, URL scheme handler
-│   ├── Services/               # 30 files: AI providers, clipboard, context, hotkeys, backend
-│   ├── UI/                     # 10 files: views, search overlay, settings, onboarding
+├── Clippy/                     # Swift macOS app
+│   ├── App/                    # Entry point, entitlements, Info.plist
+│   ├── Services/               # 29 files: AI, clipboard, context, hotkeys
+│   ├── UI/                     # 10 files: views, settings, onboarding
+│   ├── Assets.xcassets/        # App icons & assets
 │   └── Resources/              # GIF animations
-├── ClippyTests/                # 9 test files
-├── clippy-backend/
-│   ├── app.py                  # FastAPI server (all endpoints)
-│   ├── cognee_worker.py        # Subprocess worker for Cognee operations
-│   └── shared/                 # Embedding + LLM abstractions (local/remote)
-├── run.sh                      # Single entry point (launch, build, download, test, stop)
-└── docker-compose.yml          # Qdrant vector database service
+├── Clippy.xcodeproj/           # Xcode project
+├── Tests/                      # 9 Swift test files
+├── backend/                    # Python FastAPI backend (6 files)
+│   ├── app.py                  # Main server (352 lines)
+│   ├── config.py               # Centralized settings
+│   ├── models.py               # Pydantic models
+│   ├── embeddings.py           # Local/remote embedding interface
+│   ├── llm.py                  # Local/remote LLM interface
+│   ├── cognee_worker.py        # Subprocess for Cognee
+│   └── requirements.txt        # Python dependencies
+├── models/                     # GGUF model files (gitignored)
+├── run.sh                      # Single entry point
+├── docker-compose.yml          # Qdrant service
+└── README.md
 ```
 
 

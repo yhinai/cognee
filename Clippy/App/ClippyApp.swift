@@ -1,7 +1,8 @@
-import SwiftUI
-import SwiftData
 import AppKit
+import SwiftData
+import SwiftUI
 import os
+
 @main
 struct ClippyApp: App {
     // MARK: - Model Container

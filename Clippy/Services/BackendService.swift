@@ -86,14 +86,12 @@ struct BackendAskResponse: Codable {
     let question: String
     let answer: String
     let sources: Int
-    let retrievalMs: Double
-    let llmMs: Double
+    let timeMs: Double
     let model: String
 
     enum CodingKeys: String, CodingKey {
         case question, answer, sources, model
-        case retrievalMs = "retrieval_ms"
-        case llmMs = "llm_ms"
+        case timeMs = "time_ms"
     }
 }
 

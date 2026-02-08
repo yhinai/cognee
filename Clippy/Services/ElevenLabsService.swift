@@ -1,5 +1,5 @@
-import Foundation
 import AVFoundation
+import Foundation
 import os
 
 class ElevenLabsService: ObservableObject {

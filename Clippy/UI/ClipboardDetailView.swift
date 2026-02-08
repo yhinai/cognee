@@ -1,5 +1,5 @@
-import SwiftUI
 import SwiftData
+import SwiftUI
 
 struct ClipboardDetailView: View {
     @Bindable var item: Item

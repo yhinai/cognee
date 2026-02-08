@@ -1,8 +1,8 @@
-import Foundation
-import Vision
 import AppKit
 import CoreGraphics
+import Foundation
 import ScreenCaptureKit
+import Vision
 import os
 
 // MARK: - Document Structure Models

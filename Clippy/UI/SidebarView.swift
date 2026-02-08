@@ -1,5 +1,5 @@
-import SwiftUI
 import SwiftData
+import SwiftUI
 import os
 
 enum NavigationCategory: String, Identifiable {

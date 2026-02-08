@@ -1,8 +1,8 @@
 import Foundation
-import SwiftData
-import VecturaMLXKit
-import VecturaKit
 import MLXEmbedders
+import SwiftData
+import VecturaKit
+import VecturaMLXKit
 import os
 
 @MainActor

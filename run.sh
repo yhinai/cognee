@@ -14,7 +14,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-BACKEND_DIR="$SCRIPT_DIR/clippy-backend"
+BACKEND_DIR="$SCRIPT_DIR/backend"
 MODELS_DIR="$SCRIPT_DIR/models"
 BUILD_DIR="$SCRIPT_DIR/build"
 PYTHON_BIN="${PYTHON_BIN:-/opt/homebrew/bin/python3.12}"

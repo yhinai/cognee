@@ -1,55 +1,40 @@
-# IDE & Editor
-.vscode/
-.idea/
-.trae/
-*.swp
-*.swo
-*~
-
-# Build artifacts
-.build/
+# ─── Build ────────────────────────────────────────────────────────────────────
 build/
 DerivedData/
+
+# ─── Xcode ────────────────────────────────────────────────────────────────────
 *.xcodeproj/project.xcworkspace/xcuserdata/
 *.xcodeproj/xcuserdata/
+*.xcresult
 
-# Python
+# ─── Python ───────────────────────────────────────────────────────────────────
 __pycache__/
 *.pyc
 *.pyo
-*.egg-info/
-.pytest_cache/
 venv/
+.pytest_cache/
 
-# Logs
-*.log
-
-# Environment & Config
+# ─── Environment ──────────────────────────────────────────────────────────────
 .env
 */.env
-local.env
 .env.local
-.env.*.local
 
-# IDE
-.cursor/
-
-# macOS
-.DS_Store
-.AppleDouble
-.LSOverride
-._*
-
-# GGUF models (large binary files)
+# ─── Models (large binary files) ──────────────────────────────────────────────
 models/
 
-# Cognee data
+# ─── Data ─────────────────────────────────────────────────────────────────────
 .cognee_data/
 
-# Xcode
-*.xcresult
+# ─── macOS ────────────────────────────────────────────────────────────────────
+.DS_Store
+._*
 
-# Temporary
-tmp/
-temp/
+# ─── IDE ──────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+.cursor/
+
+# ─── Temp ─────────────────────────────────────────────────────────────────────
+*.log
 *.tmp
+tmp/

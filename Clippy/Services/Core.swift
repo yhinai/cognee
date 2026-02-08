@@ -1,6 +1,52 @@
 import Foundation
 import os
 
+extension Logger {
+    private static let subsystem = Bundle.main.bundleIdentifier ?? "com.clippy.app"
+
+    static let clipboard = Logger(subsystem: subsystem, category: "clipboard")
+    static let ai = Logger(subsystem: subsystem, category: "ai")
+    static let vector = Logger(subsystem: subsystem, category: "vector")
+    static let ui = Logger(subsystem: subsystem, category: "ui")
+    static let services = Logger(subsystem: subsystem, category: "services")
+    static let network = Logger(subsystem: subsystem, category: "network")
+}
+
+
+actor TokenBucketRateLimiter {
+    private var tokens: Double
+    private let maxTokens: Double
+    private let refillRate: Double
+    private var lastRefill: Date
+
+    init(maxTokens: Double = 10, refillRate: Double = 2) {
+        self.tokens = maxTokens
+        self.maxTokens = maxTokens
+        self.refillRate = refillRate
+        self.lastRefill = Date()
+    }
+
+    func acquire() async {
+        refill()
+        if tokens >= 1 {
+            tokens -= 1
+            return
+        }
+        let waitTime = (1 - tokens) / refillRate
+        try? await Task.sleep(for: .seconds(waitTime))
+        refill()
+        tokens = max(0, tokens - 1)
+    }
+
+    private func refill() {
+        let now = Date()
+        let elapsed = now.timeIntervalSince(lastRefill)
+        tokens = min(maxTokens, tokens + elapsed * refillRate)
+        lastRefill = now
+    }
+}
+
+
 /// Circuit breaker for cloud API calls.
 /// States: closed (normal) -> open (failing, reject calls) -> halfOpen (test one call).
 actor CircuitBreaker {

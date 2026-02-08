@@ -1,6 +1,6 @@
-import Foundation
 import AppKit
 import ApplicationServices
+import Foundation
 import os
 
 @MainActor

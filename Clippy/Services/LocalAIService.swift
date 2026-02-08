@@ -1,7 +1,7 @@
 import Foundation
+import MLX
 import MLXLLM
 import MLXLMCommon
-import MLX
 import os
 
 /// Native Local AI Service using MLX-Swift for in-process LLM inference.
