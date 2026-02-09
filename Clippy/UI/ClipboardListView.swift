@@ -144,8 +144,7 @@ struct ClipboardListView: View {
         searchTask?.cancel()
 
         guard !newValue.isEmpty else {
-            // Defer state change to avoid reentrant table view operation
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 self.searchResults = []
                 self.isSearching = false
             }
@@ -163,8 +162,7 @@ struct ClipboardListView: View {
 
             let ids = results.map { $0.0 }
 
-            // Defer state change to next run loop to avoid reentrant table view operation
-            DispatchQueue.main.async {
+            await MainActor.run {
                 guard !Task.isCancelled else { return }
                 let foundItems = self.allItems.filter { ids.contains($0.vectorId ?? UUID()) }
                 self.searchResults = ids.compactMap { id in
@@ -283,10 +281,13 @@ struct ClipboardListView: View {
         withAnimation(.easeInOut(duration: 0.2)) {
             copiedItemId = item.persistentModelID
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            withAnimation {
-                if copiedItemId == item.persistentModelID {
-                    copiedItemId = nil
+        Task {
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            await MainActor.run {
+                withAnimation {
+                    if copiedItemId == item.persistentModelID {
+                        copiedItemId = nil
+                    }
                 }
             }
         }
@@ -295,6 +296,11 @@ struct ClipboardListView: View {
     private func deleteItem(_ item: Item) {
         Task { @MainActor in
             modelContext.delete(item)
+            // Clamp keyboardIndex to avoid pointing past last item
+            let remaining = currentItems.count - 1
+            if keyboardIndex > remaining {
+                keyboardIndex = max(0, remaining)
+            }
             // Also remove from vector store
             try? await container.vectorSearch.deleteDocument(vectorId: item.vectorId ?? UUID())
         }
