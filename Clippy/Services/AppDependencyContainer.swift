@@ -108,6 +108,7 @@ class AppDependencyContainer: ObservableObject {
         queryOrchestrator.aiRouter = aiRouter
         queryOrchestrator.usageTracker = usageTracker
         queryOrchestrator.backendService = backendService
+        queryOrchestrator.ragService = ragService
 
         // Detect Ollama availability in background
         Task { await ollamaProvider.detectAvailability() }

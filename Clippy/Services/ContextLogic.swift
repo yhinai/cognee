@@ -15,6 +15,7 @@ class QueryOrchestrator: ObservableObject {
     var aiRouter: AIRouter?
     var usageTracker: UsageTracker?
     var backendService: BackendService?
+    var ragService: RAGService?
 
     @Published var isProcessing = false
 
@@ -141,9 +142,15 @@ class QueryOrchestrator: ObservableObject {
 
         case .backend:
             // Route through the Python backend: embed → Qdrant Prefetch+RRF → Distil Labs SLM
+            // Falls back to native RAGService when Python is unavailable
             if let backend = backendService, backend.isBackendAvailable {
                 let response = await backend.ask(query: query)
                 answer = response?.answer
+            } else if let ragService = ragService {
+                // Swift-only fallback: use RAGService with pre-built context
+                Logger.ai.info("Backend unavailable, using native RAGService")
+                let ragAnswer = await ragService.ask(question: query, contextItems: clipboardContext)
+                answer = ragAnswer.answer
             } else {
                 answer = nil
             }

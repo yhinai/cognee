@@ -243,30 +243,36 @@ else
 fi
 
 # ── 3. Model files (auto-download if missing) ─────────────────────────────
-EMBED_MODEL="$MODELS_DIR/nomic-embed-text/nomic-embed-text-v1.5.f16.gguf"
-LLM_MODEL="$MODELS_DIR/cognee-distillabs-model-gguf-quantized/model-quantized.gguf"
-LLM_FALLBACK="$MODELS_DIR/Qwen3-4B-Q4_K_M/Qwen3-4B-Q4_K_M.gguf"
-
-if [ ! -f "$EMBED_MODEL" ] || { [ ! -f "$LLM_MODEL" ] && [ ! -f "$LLM_FALLBACK" ]; }; then
-    warn "Models missing — downloading automatically..."
-    download_models
-fi
-
-if [ -f "$EMBED_MODEL" ]; then
-    ok "Embed model: nomic-embed-text ($(du -shL "$EMBED_MODEL" | cut -f1))"
+# Note: GGUF models are only used by Python backend (llama-cpp-python)
+# Swift uses MLX models which are downloaded separately by LocalAIService
+if [ "$SWIFT_ONLY" = true ]; then
+    ok "Swift-only mode: skipping GGUF model check (using MLX models)"
 else
-    err "Embedding model missing. Run: ./run.sh --download"
-    exit 1
-fi
+    EMBED_MODEL="$MODELS_DIR/nomic-embed-text/nomic-embed-text-v1.5.f16.gguf"
+    LLM_MODEL="$MODELS_DIR/cognee-distillabs-model-gguf-quantized/model-quantized.gguf"
+    LLM_FALLBACK="$MODELS_DIR/Qwen3-4B-Q4_K_M/Qwen3-4B-Q4_K_M.gguf"
 
-if [ -f "$LLM_MODEL" ]; then
-    ok "LLM model:   Distil Labs SLM ($(du -shL "$LLM_MODEL" | cut -f1))"
-elif [ -f "$LLM_FALLBACK" ]; then
-    ok "LLM model:   Qwen3-4B fallback ($(du -shL "$LLM_FALLBACK" | cut -f1))"
-    warn "Distil Labs SLM not found — using Qwen3-4B"
-else
-    err "No LLM model. Run: ./run.sh --download"
-    exit 1
+    if [ ! -f "$EMBED_MODEL" ] || { [ ! -f "$LLM_MODEL" ] && [ ! -f "$LLM_FALLBACK" ]; }; then
+        warn "Models missing — downloading automatically..."
+        download_models
+    fi
+
+    if [ -f "$EMBED_MODEL" ]; then
+        ok "Embed model: nomic-embed-text ($(du -shL "$EMBED_MODEL" | cut -f1))"
+    else
+        err "Embedding model missing. Run: ./run.sh --download"
+        exit 1
+    fi
+
+    if [ -f "$LLM_MODEL" ]; then
+        ok "LLM model:   Distil Labs SLM ($(du -shL "$LLM_MODEL" | cut -f1))"
+    elif [ -f "$LLM_FALLBACK" ]; then
+        ok "LLM model:   Qwen3-4B fallback ($(du -shL "$LLM_FALLBACK" | cut -f1))"
+        warn "Distil Labs SLM not found — using Qwen3-4B"
+    else
+        err "No LLM model. Run: ./run.sh --download"
+        exit 1
+    fi
 fi
 
 # ── 4. Python venv + deps ─────────────────────────────────────────────────
@@ -358,9 +364,12 @@ fi
 
 # ── 7. Optional: pipeline test ─────────────────────────────────────────────
 if [ "$RUN_TEST" = true ]; then
-    echo ""
-    log "Running full pipeline test..."
-    python3 -c "
+    if [ "$SWIFT_ONLY" = true ]; then
+        warn "Pipeline tests require Python backend. Skipping in Swift-only mode."
+    else
+        echo ""
+        log "Running full pipeline test..."
+        python3 -c "
 import json, time, urllib.request
 
 BASE = 'http://localhost:$BACKEND_PORT'
@@ -398,6 +407,7 @@ test('GET',  '/cognee-search?q=Eiffel+Tower&search_type=CHUNKS', label='Cognee s
 
 print(f'\n  Results: {passed} passed, {failed} failed')
 "
+    fi
 fi
 
 # ── 8. Build & launch Clippy.app ──────────────────────────────────────────
