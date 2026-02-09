@@ -84,8 +84,8 @@ struct ClipboardListView: View {
 
     private func handleEscapeKey() -> KeyPress.Result {
         if !selectedItems.isEmpty {
-            // Use Task to break out of the key event handler context
             Task { @MainActor in
+                await Task.yield()  // Break to next runloop to avoid reentrant table view
                 withAnimation(.easeOut(duration: 0.15)) {
                     selectedItems.removeAll()
                 }
@@ -97,18 +97,28 @@ struct ClipboardListView: View {
 
     private func handleUpArrowKey() -> KeyPress.Result {
         let items = currentItems
-        if keyboardIndex > 0 {
-            keyboardIndex -= 1
-            selectItemAtIndex(keyboardIndex, in: items)
+        let currentIndex = keyboardIndex
+        guard currentIndex > 0 else { return .handled }
+        let newIndex = currentIndex - 1
+        let itemId = items[newIndex].persistentModelID
+        Task { @MainActor in
+            await Task.yield()
+            keyboardIndex = newIndex
+            selectedItems = [itemId]
         }
         return .handled
     }
 
     private func handleDownArrowKey() -> KeyPress.Result {
         let items = currentItems
-        if keyboardIndex < items.count - 1 {
-            keyboardIndex += 1
-            selectItemAtIndex(keyboardIndex, in: items)
+        let currentIndex = keyboardIndex
+        guard currentIndex < items.count - 1 else { return .handled }
+        let newIndex = currentIndex + 1
+        let itemId = items[newIndex].persistentModelID
+        Task { @MainActor in
+            await Task.yield()
+            keyboardIndex = newIndex
+            selectedItems = [itemId]
         }
         return .handled
     }
@@ -294,15 +304,19 @@ struct ClipboardListView: View {
     }
     
     private func deleteItem(_ item: Item) {
-        Task { @MainActor in
-            modelContext.delete(item)
-            // Clamp keyboardIndex to avoid pointing past last item
-            let remaining = currentItems.count - 1
-            if keyboardIndex > remaining {
-                keyboardIndex = max(0, remaining)
+        let vectorId = item.vectorId
+        Task {
+            await Task.yield()  // Break to next runloop
+            await MainActor.run {
+                modelContext.delete(item)
+                // Clamp keyboardIndex to avoid pointing past last item
+                let remaining = max(0, currentItems.count - 1)
+                if keyboardIndex > remaining {
+                    keyboardIndex = remaining
+                }
             }
-            // Also remove from vector store
-            try? await container.vectorSearch.deleteDocument(vectorId: item.vectorId ?? UUID())
+            // Remove from vector store in background (non-blocking)
+            try? await container.vectorSearch.deleteDocument(vectorId: vectorId ?? UUID())
         }
     }
 }
