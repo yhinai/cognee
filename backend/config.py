@@ -6,7 +6,11 @@ import os
 
 # Paths
 BASE_DIR = os.path.dirname(__file__)
-MODELS_DIR = os.path.join(BASE_DIR, "..", "models")
+REPO_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))
+MODELS_DIR = os.path.join(REPO_ROOT, "models")
+DATA_DIR = os.path.join(REPO_ROOT, ".data")
+COGNEE_DATA_DIR = os.path.join(DATA_DIR, "cognee")
+ENV_PATH = os.path.join(DATA_DIR, ".env")
 
 EMBED_MODEL_PATH = os.path.join(MODELS_DIR, "nomic-embed-text", "nomic-embed-text-v1.5.f16.gguf")
 LLM_MODEL_PATH = os.path.join(MODELS_DIR, "cognee-distillabs-model-gguf-quantized", "model-quantized.gguf")

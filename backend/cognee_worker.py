@@ -26,15 +26,20 @@ import os
 import sys
 
 # ── Env vars BEFORE any imports ──────────────────────────────────────────────
+from dotenv import load_dotenv
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))
+DATA_DIR = os.path.join(REPO_ROOT, ".data")
+ENV_PATH = os.path.join(DATA_DIR, ".env")
+COGNEE_DATA_DIR = os.path.join(DATA_DIR, "cognee")
+
+load_dotenv(ENV_PATH)
+
 os.environ.setdefault("GGML_LOG_LEVEL", "4")  # errors only — suppress Metal bf16 noise
 os.environ.setdefault("ENABLE_BACKEND_ACCESS_CONTROL", "false")
 os.environ.setdefault("TELEMETRY_DISABLED", "1")
 os.environ.setdefault("ENV", "dev")
-
-from dotenv import load_dotenv
-
-load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
-
 os.environ.setdefault("VECTOR_DB_PROVIDER", "qdrant")
 os.environ.setdefault("VECTOR_DB_URL", os.getenv("QDRANT_URL", "http://localhost:6333"))
 os.environ.setdefault("VECTOR_DATASET_DATABASE_HANDLER", "qdrant")
@@ -59,15 +64,12 @@ except Exception:
 
 import cognee  # noqa: E402
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
 
 def _configure_cognee():
     """Set Cognee runtime config: Qdrant backend + project-level data dir."""
-    cognee_data_dir = os.path.join(BASE_DIR, ".cognee_data")
-    os.makedirs(cognee_data_dir, exist_ok=True)
-    cognee.config.data_root_directory(cognee_data_dir)
-    cognee.config.system_root_directory(cognee_data_dir)
+    os.makedirs(COGNEE_DATA_DIR, exist_ok=True)
+    cognee.config.data_root_directory(COGNEE_DATA_DIR)
+    cognee.config.system_root_directory(COGNEE_DATA_DIR)
     cognee.config.set_vector_db_provider("qdrant")
     cognee.config.set_vector_db_url(os.getenv("QDRANT_URL", "http://localhost:6333"))
 

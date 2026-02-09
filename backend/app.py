@@ -20,13 +20,16 @@ import uuid
 from contextlib import asynccontextmanager
 
 # ── Environment bootstrap (BEFORE library imports) ────────────────────────────
+from dotenv import load_dotenv
+
+BASE_DIR = os.path.dirname(__file__)
+REPO_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))
+ENV_PATH = os.path.join(REPO_ROOT, ".data", ".env")
+load_dotenv(ENV_PATH)
+
 os.environ.setdefault("GGML_LOG_LEVEL", "4")
 os.environ.setdefault("ENABLE_BACKEND_ACCESS_CONTROL", "false")
 os.environ.setdefault("TELEMETRY_DISABLED", "1")
-
-from dotenv import load_dotenv
-load_dotenv()
-
 os.environ.setdefault("VECTOR_DB_PROVIDER", "qdrant")
 os.environ.setdefault("VECTOR_DB_URL", os.getenv("QDRANT_URL", "http://localhost:6333"))
 
@@ -42,6 +45,7 @@ from qdrant_client.models import (
 )
 
 from config import (
+    COGNEE_DATA_DIR,
     EMBED_MODEL_PATH, LLM_MODEL_PATH, LLM_FALLBACK_PATH,
     QDRANT_URL, COLLECTION, VECTOR_DIM,
     COGNEE_ADD_TIMEOUT, COGNEE_COGNIFY_TIMEOUT, COGNEE_SEARCH_TIMEOUT,
@@ -56,12 +60,13 @@ from ai import (
     init_llm, get_llm_response, is_llm_available as llm_ok, get_llm_model_name as llm_name
 )
 
+load_dotenv(ENV_PATH)
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
 logger = logging.getLogger("clippy")
 
 # ── Clients ───────────────────────────────────────────────────────────────────
 qdrant = QdrantClient(url=QDRANT_URL)
-BASE_DIR = os.path.dirname(__file__)
 
 # ── Cognee (optional) ─────────────────────────────────────────────────────────
 try:
@@ -132,10 +137,9 @@ async def lifespan(app: FastAPI):
     if COGNEE_OK:
         try:
             import cognee_community_vector_adapter_qdrant.register  # noqa
-            cognee_data = os.path.join(BASE_DIR, ".cognee_data")
-            os.makedirs(cognee_data, exist_ok=True)
-            cognee.config.data_root_directory(cognee_data)
-            cognee.config.system_root_directory(cognee_data)
+            os.makedirs(COGNEE_DATA_DIR, exist_ok=True)
+            cognee.config.data_root_directory(COGNEE_DATA_DIR)
+            cognee.config.system_root_directory(COGNEE_DATA_DIR)
             cognee.config.set_vector_db_provider("qdrant")
             cognee.config.set_vector_db_url(QDRANT_URL)
             cognee.config.set_llm_api_key(os.getenv("LLM_API_KEY_COGNEE", ""))
