@@ -143,6 +143,7 @@ build_app() {
                -scheme Clippy \
                -destination 'platform=macOS,arch=arm64' \
                -configuration Debug \
+               -derivedDataPath "$BUILD_DIR/DerivedData" \
                SYMROOT="$BUILD_DIR" \
                CODE_SIGN_IDENTITY="" \
                CODE_SIGNING_REQUIRED=NO \

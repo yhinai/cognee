@@ -84,7 +84,9 @@ struct ClipboardListView: View {
 
     private func handleEscapeKey() -> KeyPress.Result {
         if !selectedItems.isEmpty {
-            selectedItems.removeAll()
+            deferListMutation {
+                selectedItems.removeAll()
+            }
             return .handled
         }
         return .ignored
@@ -127,7 +129,9 @@ struct ClipboardListView: View {
     private func handleFavoriteKey() -> KeyPress.Result {
         let items = currentItems
         if keyboardIndex >= 0, keyboardIndex < items.count {
-            items[keyboardIndex].isFavorite.toggle()
+            deferListMutation {
+                items[keyboardIndex].isFavorite.toggle()
+            }
         }
         return .handled
     }
@@ -187,7 +191,9 @@ struct ClipboardListView: View {
 
     private func selectItemAtIndex(_ index: Int, in items: [Item]) {
         guard index >= 0, index < items.count else { return }
-        selectedItems = [items[index].persistentModelID]
+        deferListMutation {
+            selectedItems = [items[index].persistentModelID]
+        }
     }
 
     // MARK: - Shared Row Builder
@@ -199,7 +205,7 @@ struct ClipboardListView: View {
             isSelected: selectedItems.contains(item.persistentModelID),
             isCopied: copiedItemId == item.persistentModelID
         )
-            .tag(item)
+            .tag(item.persistentModelID)
             .listRowSeparator(.hidden)
             .listRowBackground(Color.clear)
             .contextMenu {
@@ -210,7 +216,9 @@ struct ClipboardListView: View {
                 }
 
                 Button {
-                    item.isFavorite.toggle()
+                    deferListMutation {
+                        item.isFavorite.toggle()
+                    }
                 } label: {
                     Label(item.isFavorite ? "Unfavorite" : "Favorite", systemImage: item.isFavorite ? "heart.slash" : "heart")
                 }
@@ -279,13 +287,19 @@ struct ClipboardListView: View {
     }
     
     private func deleteItem(_ item: Item) {
-        modelContext.delete(item)
+        deferListMutation {
+            modelContext.delete(item)
+        }
         // Note: For complete consistency, we should also delete from Vector DB using ClipboardRepository if available,
         // but modelContext deletion is propagated via NotificationCenter if setup, or we rely on next app launch sync.
         // For now, this suffices for UI.
         Task {
              try? await container.vectorSearch.deleteDocument(vectorId: item.vectorId ?? UUID())
         }
+    }
+
+    private func deferListMutation(_ action: @escaping () -> Void) {
+        DispatchQueue.main.async(execute: action)
     }
 }
 
@@ -495,4 +509,3 @@ struct ClipboardItemRowStyle: ViewModifier {
             .animation(.easeInOut(duration: 0.15), value: isHovering)
     }
 }
-
