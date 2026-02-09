@@ -3,6 +3,9 @@ import os
 
 /// Native RAG (Retrieval-Augmented Generation) service for in-process Q&A.
 /// Replaces the Python backend's `/ask` endpoint with pure Swift using MLX.
+///
+/// Note: Context items must be provided by the caller (e.g., QueryOrchestrator).
+/// This service does not perform its own vector search - that's handled upstream.
 @MainActor
 class RAGService: ObservableObject {
     @Published var isProcessing = false
@@ -11,9 +14,6 @@ class RAGService: ObservableObject {
     private weak var vectorSearch: VectorSearchService?
     private weak var localAI: LocalAIService?
 
-    // Configuration
-    private let contextLimit = 5
-
     init(vectorSearch: VectorSearchService?, localAI: LocalAIService?) {
         self.vectorSearch = vectorSearch
         self.localAI = localAI
@@ -21,33 +21,27 @@ class RAGService: ObservableObject {
 
     // MARK: - Public API
 
-    /// Ask a question using RAG. Uses search results directly without repository lookup.
+    /// Ask a question using RAG with pre-built context items.
     /// - Parameters:
     ///   - question: The user's question
-    ///   - contextItems: Pre-built context items (typically from QueryOrchestrator)
+    ///   - contextItems: Pre-built context items from QueryOrchestrator (required)
     /// - Returns: A RAGAnswer with the question, answer, source count, model, and timing
-    func ask(question: String, contextItems: [RAGContextItem] = []) async -> RAGAnswer {
+    func ask(question: String, contextItems: [RAGContextItem]) async -> RAGAnswer {
         isProcessing = true
         defer { isProcessing = false }
         lastError = nil
 
         let startTime = Date()
 
-        // If no context provided, try vector search
-        var items = contextItems
-        if items.isEmpty, let vectorSearch = vectorSearch {
-            let searchResults = await vectorSearch.search(query: question, limit: contextLimit)
-            if searchResults.isEmpty {
-                return RAGAnswer(
-                    question: question,
-                    answer: "I couldn't find any relevant content in your clipboard history.",
-                    sources: 0,
-                    model: "local",
-                    timeMs: Date().timeIntervalSince(startTime) * 1000
-                )
-            }
-            // Note: Without repository lookup, we can only return a generic message
-            // In practice, QueryOrchestrator should provide the contextItems
+        // Context must be provided by caller
+        if contextItems.isEmpty {
+            return RAGAnswer(
+                question: question,
+                answer: "I couldn't find any relevant content in your clipboard history.",
+                sources: 0,
+                model: "local",
+                timeMs: Date().timeIntervalSince(startTime) * 1000
+            )
         }
 
         // Generate answer using local LLM
@@ -56,7 +50,7 @@ class RAGService: ObservableObject {
             return RAGAnswer(
                 question: question,
                 answer: "AI service unavailable.",
-                sources: items.count,
+                sources: contextItems.count,
                 model: "none",
                 timeMs: Date().timeIntervalSince(startTime) * 1000
             )
@@ -64,7 +58,7 @@ class RAGService: ObservableObject {
 
         let answer = await localAI.generateAnswer(
             question: question,
-            clipboardContext: items,
+            clipboardContext: contextItems,
             appName: nil
         ) ?? "I couldn't generate an answer."
 
@@ -73,13 +67,13 @@ class RAGService: ObservableObject {
         return RAGAnswer(
             question: question,
             answer: answer,
-            sources: items.count,
+            sources: contextItems.count,
             model: "Qwen2.5-1.5B",
             timeMs: timeMs
         )
     }
 
-    /// Simple text chunking for long documents (replaces Cognee's chunking).
+    /// Simple text chunking for long documents.
     func chunkText(_ text: String, maxChunkSize: Int = 500, overlap: Int = 50) -> [String] {
         guard text.count > maxChunkSize else { return [text] }
 
@@ -91,7 +85,6 @@ class RAGService: ObservableObject {
             let chunk = String(text[start..<end])
             chunks.append(chunk)
 
-            // Move start forward, accounting for overlap
             let nextStart = text.index(start, offsetBy: maxChunkSize - overlap, limitedBy: text.endIndex)
             if let next = nextStart, next > start {
                 start = next
