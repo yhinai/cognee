@@ -68,7 +68,7 @@ class AppDependencyContainer: ObservableObject {
         self.usageTracker = UsageTracker()
         self.geminiProvider = GeminiProvider()
         self.textCaptureService = TextCaptureService()
-        self.ragService = RAGService(vectorSearch: vectorSearch, localAI: localAIService)
+        self.ragService = RAGService(localAI: localAIService)
 
         // 2. Multi-provider AI setup
         self.claudeProvider = ClaudeProvider()

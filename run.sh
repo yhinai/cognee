@@ -210,7 +210,9 @@ fi
 ok "Python: $($PYTHON_BIN --version 2>&1)"
 
 # ── 2. Docker + Qdrant ────────────────────────────────────────────────────
-if curl -s "http://localhost:$QDRANT_PORT/healthz" > /dev/null 2>&1; then
+if [ "$SWIFT_ONLY" = true ]; then
+    ok "Swift-only mode: skipping Qdrant (using in-memory VecturaMLXKit)"
+elif curl -s "http://localhost:$QDRANT_PORT/healthz" > /dev/null 2>&1; then
     ok "Qdrant already running (port $QDRANT_PORT)"
 else
     if ! command -v docker &>/dev/null; then

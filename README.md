@@ -287,6 +287,7 @@ nano backend/.env
 
 ```bash
 ./run.sh                # Launch all: Docker, Qdrant, backend, Clippy.app
+./run.sh --swift-only   # Pure Swift: MLX only, no Python/Docker/Qdrant
 ./run.sh --debug        # Launch all + run Clippy.app with visible logs
 ./run.sh --test         # Launch services + run 10-endpoint pipeline test
 ./run.sh --no-app       # Backend services only, skip Swift build
@@ -294,6 +295,9 @@ nano backend/.env
 ./run.sh --build        # Build and launch Clippy.app only
 ./run.sh --stop         # Stop all services
 ```
+
+> **Note**: `--swift-only` uses VecturaMLXKit (in-memory vectors) and local MLX models.
+> The `.backend` AI mode auto-falls back to Swift RAG if Python is unavailable.
 
 ### First Launch
 

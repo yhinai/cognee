@@ -11,11 +11,9 @@ class RAGService: ObservableObject {
     @Published var isProcessing = false
     @Published var lastError: String?
 
-    private weak var vectorSearch: VectorSearchService?
     private weak var localAI: LocalAIService?
 
-    init(vectorSearch: VectorSearchService?, localAI: LocalAIService?) {
-        self.vectorSearch = vectorSearch
+    init(localAI: LocalAIService?) {
         self.localAI = localAI
     }
 
