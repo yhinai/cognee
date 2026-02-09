@@ -147,8 +147,8 @@ struct ClipboardListView: View {
         let items = currentItems
         guard keyboardIndex >= 0, keyboardIndex < items.count else { return .handled }
         let item = items[keyboardIndex]
-        // Capture the item reference, not the array index
         Task { @MainActor in
+            await Task.yield()
             item.isFavorite.toggle()
         }
         return .handled
@@ -159,13 +159,18 @@ struct ClipboardListView: View {
 
         guard !newValue.isEmpty else {
             Task { @MainActor in
+                await Task.yield()
                 self.searchResults = []
                 self.isSearching = false
             }
             return
         }
 
-        isSearching = true
+        // Defer isSearching change to next runloop
+        Task { @MainActor in
+            await Task.yield()
+            isSearching = true
+        }
 
         searchTask = Task {
             try? await Task.sleep(nanoseconds: 300_000_000)
