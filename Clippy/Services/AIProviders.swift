@@ -420,3 +420,292 @@ class OllamaProvider: ObservableObject, AIProvider {
         }
     }
 }
+
+// MARK: - Gemini Provider
+
+struct GeminiAPIResponse: Codable {
+    struct Candidate: Codable {
+        struct Content: Codable {
+            struct Part: Codable {
+                let text: String?
+            }
+            let parts: [Part]?
+            let role: String?
+        }
+        let content: Content?
+        let finishReason: String?
+    }
+    let candidates: [Candidate]?
+}
+
+@MainActor
+class GeminiProvider: ObservableObject, AIProvider {
+    let id = "gemini"
+    let displayName = "Gemini (Google)"
+    let providerType: ProviderType = .cloud
+    let capabilities: Set<AICapability> = [.textGeneration, .vision, .tagging]
+
+    @Published var isProcessing = false
+    @Published var lastError: String?
+    @Published var lastErrorMessage: String?
+
+    private let baseURL = "https://generativelanguage.googleapis.com/v1beta/models"
+    private let modelName = "gemini-2.5-flash"
+    private let keychainKey = "Gemini_API_Key"
+    private let rateLimiter = TokenBucketRateLimiter(maxTokens: 10, refillRate: 2)
+    private var lastTagRequestTime: Date?
+    private let tagDebounceInterval: TimeInterval = 2.0
+
+    var isAvailable: Bool {
+        KeychainHelper.load(key: keychainKey) != nil
+    }
+
+    private var apiKey: String? {
+        KeychainHelper.load(key: keychainKey)
+    }
+
+    // MARK: - AIServiceProtocol
+
+    func generateAnswer(
+        question: String,
+        clipboardContext: [RAGContextItem],
+        appName: String?
+    ) async -> String? {
+        let legacyContext = clipboardContext.map { (content: $0.content, tags: $0.tags) }
+        let (answer, _) = await generateAnswerWithImageDetection(
+            question: question,
+            clipboardContext: legacyContext,
+            appName: appName
+        )
+        return answer
+    }
+
+    func generateTags(
+        content: String,
+        appName: String?,
+        context: String?
+    ) async -> [String] {
+        let now = Date()
+        if let lastTime = lastTagRequestTime, now.timeIntervalSince(lastTime) < tagDebounceInterval {
+            return []
+        }
+        lastTagRequestTime = now
+
+        isProcessing = true
+        defer { isProcessing = false }
+
+        let prompt = buildTaggingPrompt(content: content, appName: appName, context: context)
+        guard let tags = await callGemini(prompt: prompt) else { return [] }
+        return tags
+    }
+
+    func analyzeImage(imageData: Data) async -> String? {
+        guard let apiKey = apiKey, !apiKey.isEmpty else { return nil }
+
+        let base64Image = imageData.base64EncodedString()
+        guard let url = URL(string: "\(baseURL)/\(modelName):generateContent") else { return nil }
+
+        let requestBody: [String: Any] = [
+            "contents": [
+                [
+                    "parts": [
+                        ["text": "give quick summary of it."],
+                        [
+                            "inline_data": [
+                                "mime_type": "image/png",
+                                "data": base64Image
+                            ]
+                        ]
+                    ]
+                ]
+            ],
+            "generationConfig": ["maxOutputTokens": 8192]
+        ]
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(apiKey, forHTTPHeaderField: "x-goog-api-key")
+
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else { return nil }
+
+            let apiResponse = try JSONDecoder().decode(GeminiAPIResponse.self, from: data)
+            return apiResponse.candidates?.first?.content?.parts?.first?.text
+        } catch {
+            return nil
+        }
+    }
+
+    // MARK: - Internal Logic
+
+    func generateAnswerWithImageDetection(
+        question: String,
+        clipboardContext: [(content: String, tags: [String])],
+        appName: String?
+    ) async -> (answer: String?, imageIndex: Int?) {
+        isProcessing = true
+        defer { isProcessing = false }
+        
+        let prompt = buildAnswerPrompt(question: question, clipboardContext: clipboardContext, appName: appName)
+        return await callGeminiForAnswerWithImage(prompt: prompt) ?? (nil, nil)
+    }
+
+    private func buildAnswerPrompt(question: String, clipboardContext: [(content: String, tags: [String])], appName: String?) -> String {
+        let contextText: String
+        if clipboardContext.isEmpty {
+            contextText = "No clipboard context available."
+        } else {
+            contextText = clipboardContext.enumerated().map { index, item in
+                let tagsText = item.tags.isEmpty ? "" : " [Tags: \(item.tags.joined(separator: ", "))]"
+                return "[\(index + 1)]\(tagsText)\n\(item.content)"
+            }.joined(separator: "\n\n---\n\n")
+        }
+        
+        let prompt = """
+        You are a Clippy assistant. Answer the user's question based on their clipboard history.
+        User Question: \(question)
+        Clipboard Context:
+        \(contextText)
+        App: \(appName ?? "Unknown")
+
+        CRITICAL RULES:
+        1. If user asks to paste/show/insert an image, return the item number in paste_image (1-based).
+        2. For text questions, answer directly in A with no preamble.
+        3. If the question is not about clipboard content, return an empty string in A.
+        4. OUTPUT MUST BE VALID JSON ONLY (no markdown, no extra text).
+
+        OUTPUT FORMAT:
+        { "A": "direct answer", "paste_image": 0 }
+        """
+        return prompt
+    }
+
+    private func buildTaggingPrompt(content: String, appName: String?, context: String?) -> String {
+        return """
+        App: \(appName ?? "Unknown")
+        Content: \(content.prefix(500))
+        Generate 3-7 semantic tags. Return ONLY JSON (no markdown, no extra text):
+        { "tags": ["tag1", "tag2"] }
+        """
+    }
+
+    private func callGeminiAPI(body: [String: Any], label: String) async -> String? {
+        guard let apiKey = apiKey, !apiKey.isEmpty else {
+            lastErrorMessage = "API key not configured."
+            return nil
+        }
+        guard let url = URL(string: "\(baseURL)/\(modelName):generateContent") else { return nil }
+
+        let maxRetries = 3
+        let backoffDelays: [Double] = [1, 2, 4]
+
+        for attempt in 0...maxRetries {
+            await rateLimiter.acquire()
+
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue(apiKey, forHTTPHeaderField: "x-goog-api-key")
+
+            do {
+                request.httpBody = try JSONSerialization.data(withJSONObject: body)
+                let (data, response) = try await URLSession.shared.data(for: request)
+
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    lastError = "Invalid response"
+                    lastErrorMessage = "Network error - invalid response"
+                    return nil
+                }
+
+                if httpResponse.statusCode == 429 && attempt < maxRetries {
+                    lastErrorMessage = "Rate limited. Retrying..."
+                    try? await Task.sleep(for: .seconds(backoffDelays[attempt]))
+                    continue
+                }
+
+                guard httpResponse.statusCode == 200 else {
+                    let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
+                    lastError = "API Error (\(httpResponse.statusCode)): \(errorMessage)"
+                    switch httpResponse.statusCode {
+                    case 400: lastErrorMessage = "Bad request - check your query"
+                    case 401, 403: lastErrorMessage = "Invalid API key. Check Settings."
+                    case 429: lastErrorMessage = "Rate limited. Try again later."
+                    case 500...599: lastErrorMessage = "Gemini server error. Try again."
+                    default: lastErrorMessage = "API error (\(httpResponse.statusCode))"
+                    }
+                    return nil
+                }
+
+                // Clear error on success
+                lastErrorMessage = nil
+                lastError = nil
+
+                let apiResponse = try JSONDecoder().decode(GeminiAPIResponse.self, from: data)
+                let text = apiResponse.candidates?.first?.content?.parts?.first?.text ?? ""
+                return cleanMarkdownJSON(text)
+
+            } catch let error as URLError {
+                lastError = error.localizedDescription
+                switch error.code {
+                case .notConnectedToInternet: lastErrorMessage = "No internet connection"
+                case .timedOut: lastErrorMessage = "Request timed out. Try again."
+                default: lastErrorMessage = "Network error. Check connection."
+                }
+                return nil
+            } catch {
+                lastError = error.localizedDescription
+                lastErrorMessage = "Something went wrong. Try again."
+                return nil
+            }
+        }
+        return nil
+    }
+
+    private func callGeminiForAnswerWithImage(prompt: String) async -> (String?, Int?)? {
+        let body: [String: Any] = [
+            "contents": [["parts": [["text": prompt]]]],
+            "generationConfig": ["response_mime_type": "application/json", "maxOutputTokens": 8192]
+        ]
+        guard let text = await callGeminiAPI(body: body, label: "Answer") else { return nil }
+
+        if let jsonData = text.data(using: .utf8),
+           let jsonObject = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] {
+            let answer = (jsonObject["A"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let pasteImage = jsonObject["paste_image"] as? Int
+            return (answer, pasteImage)
+        }
+        return (text, nil)
+    }
+
+    private func callGemini(prompt: String) async -> [String]? {
+        let body: [String: Any] = [
+            "contents": [["parts": [["text": prompt]]]],
+            "generationConfig": ["response_mime_type": "application/json", "maxOutputTokens": 8192]
+        ]
+        guard let text = await callGeminiAPI(body: body, label: "Tags") else { return nil }
+
+        if let jsonData = text.data(using: .utf8),
+           let jsonObject = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+           let tagsHelper = jsonObject["tags"] as? [String] {
+            return tagsHelper
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+                .filter { !$0.isEmpty }
+        }
+        return []
+    }
+
+    private func cleanMarkdownJSON(_ text: String) -> String {
+        var cleaned = text
+        if cleaned.contains("```json") {
+            cleaned = cleaned.replacingOccurrences(of: "```json", with: "")
+            cleaned = cleaned.replacingOccurrences(of: "```", with: "")
+        } else if cleaned.contains("```") {
+            cleaned = cleaned.replacingOccurrences(of: "```", with: "")
+        }
+        return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}

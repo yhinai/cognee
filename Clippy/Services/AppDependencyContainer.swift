@@ -16,7 +16,7 @@ class AppDependencyContainer: ObservableObject {
 
     // AI Services
     let localAIService: LocalAIService
-    let geminiService: GeminiService
+    let geminiProvider: GeminiProvider
     let audioRecorder: AudioRecorder
     let queryOrchestrator: QueryOrchestrator
     let usageTracker: UsageTracker
@@ -65,7 +65,7 @@ class AppDependencyContainer: ObservableObject {
         self.audioRecorder = AudioRecorder()
         self.localAIService = LocalAIService()
         self.usageTracker = UsageTracker()
-        self.geminiService = GeminiService(apiKey: KeychainHelper.load(key: "Gemini_API_Key") ?? "")
+        self.geminiProvider = GeminiProvider()
         self.textCaptureService = TextCaptureService()
 
         // 2. Multi-provider AI setup
@@ -92,7 +92,7 @@ class AppDependencyContainer: ObservableObject {
         self.clipboardMonitor = ClipboardMonitor()
         self.queryOrchestrator = QueryOrchestrator(
             vectorSearch: vectorSearch,
-            geminiService: geminiService,
+            geminiProvider: geminiProvider,
             localAIService: localAIService
         )
 
@@ -100,6 +100,7 @@ class AppDependencyContainer: ObservableObject {
         registry.register(claudeProvider)
         registry.register(openAIProvider)
         registry.register(ollamaProvider)
+        registry.register(geminiProvider)
 
         // Wire AIRouter, UsageTracker, and BackendService into QueryOrchestrator
         queryOrchestrator.aiRouter = aiRouter
@@ -123,7 +124,7 @@ class AppDependencyContainer: ObservableObject {
             clipboardMonitor.startMonitoring(
                 repository: repo,
                 contextEngine: contextEngine,
-                geminiService: geminiService,
+                geminiProvider: geminiProvider,
                 localAIService: localAIService,
                 backendService: backendService
             )

@@ -17,7 +17,7 @@ class ClipboardMonitor: ObservableObject {
     private var lastChangeCount: Int = 0
     private var repository: ClipboardRepository?
     private var contextEngine: ContextEngine?
-    private var geminiService: GeminiService?
+    private var geminiProvider: GeminiProvider?
     private var localAIService: LocalAIService?
     private var backendService: BackendService?
 
@@ -39,13 +39,13 @@ class ClipboardMonitor: ObservableObject {
     func startMonitoring(
         repository: ClipboardRepository,
         contextEngine: ContextEngine,
-        geminiService: GeminiService? = nil,
+        geminiProvider: GeminiProvider? = nil,
         localAIService: LocalAIService? = nil,
         backendService: BackendService? = nil
     ) {
         self.repository = repository
         self.contextEngine = contextEngine
-        self.geminiService = geminiService
+        self.geminiProvider = geminiProvider
         self.localAIService = localAIService
         self.backendService = backendService
         
@@ -201,7 +201,7 @@ class ClipboardMonitor: ObservableObject {
                         }
                     }
                 }
-            } else if let gemini = await self.geminiService {
+            } else if let gemini = await self.geminiProvider {
                 description = await gemini.analyzeImage(imageData: pngData) ?? "[Image]"
             }
             
@@ -297,7 +297,7 @@ class ClipboardMonitor: ObservableObject {
                 tags = await Task { @MainActor in
                     await localService.generateTags(content: content, appName: appName, context: nil)
                 }.value
-            } else if let gemini = await self.geminiService {
+            } else if let gemini = await self.geminiProvider {
                 tags = await Task { @MainActor in
                     await gemini.generateTags(content: content, appName: appName, context: nil)
                 }.value

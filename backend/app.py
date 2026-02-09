@@ -4,8 +4,8 @@ Clippy Backend — FastAPI server with Cognee + Qdrant + Local LLM.
 Lean, flat structure:
 - config.py: all settings
 - models.py: Pydantic models
-- embeddings.py: nomic-embed-text via llama-cpp-python
-- llm.py: Distil Labs SLM / Qwen3-4B via llama-cpp-python
+- models.py: Pydantic models
+- ai.py: Unified AI services (LLM + Embeddings)
 """
 
 import asyncio
@@ -51,8 +51,10 @@ from models import (
     AddItemRequest, AddKnowledgeRequest, ExtractEntitiesRequest,
     ChatCompletionRequest, point_to_dict,
 )
-from embeddings import init_embeddings, get_embedding, is_available as embed_ok, get_model_name as embed_name
-from llm import init_llm, get_llm_response, is_available as llm_ok, get_model_name as llm_name
+from ai import (
+    init_embeddings, get_embedding, is_embedding_available as embed_ok, get_embed_model_name as embed_name,
+    init_llm, get_llm_response, is_llm_available as llm_ok, get_llm_model_name as llm_name
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
 logger = logging.getLogger("clippy")

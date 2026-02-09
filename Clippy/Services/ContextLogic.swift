@@ -10,7 +10,7 @@ import os
 class QueryOrchestrator: ObservableObject {
     // Dependencies
     private let vectorSearch: VectorSearchService
-    private let geminiService: GeminiService
+    private let geminiProvider: GeminiProvider
     private let localAIService: LocalAIService
     var aiRouter: AIRouter?
     var usageTracker: UsageTracker?
@@ -25,9 +25,9 @@ class QueryOrchestrator: ObservableObject {
         let errorMessage: String?
     }
 
-    init(vectorSearch: VectorSearchService, geminiService: GeminiService, localAIService: LocalAIService) {
+    init(vectorSearch: VectorSearchService, geminiProvider: GeminiProvider, localAIService: LocalAIService) {
         self.vectorSearch = vectorSearch
-        self.geminiService = geminiService
+        self.geminiProvider = geminiProvider
         self.localAIService = localAIService
     }
 
@@ -102,7 +102,7 @@ class QueryOrchestrator: ObservableObject {
         switch aiServiceType {
         case .gemini:
             let simpleContext = safeItems.map { ($0.content, $0.tags) }
-            (answer, imageIndex) = await geminiService.generateAnswerWithImageDetection(
+            (answer, imageIndex) = await geminiProvider.generateAnswerWithImageDetection(
                 question: query,
                 clipboardContext: simpleContext,
                 appName: appName
@@ -154,7 +154,7 @@ class QueryOrchestrator: ObservableObject {
         let errorMessage: String?
         switch aiServiceType {
         case .gemini:
-            errorMessage = answer == nil ? (geminiService.lastErrorMessage ?? "Gemini returned no response") : geminiService.lastErrorMessage
+            errorMessage = answer == nil ? (geminiProvider.lastErrorMessage ?? "Gemini returned no response") : geminiProvider.lastErrorMessage
         case .local:
             errorMessage = answer == nil ? (localAIService.lastError ?? "Local AI returned no response") : nil
         case .claude, .openai, .ollama:
@@ -178,11 +178,19 @@ class QueryOrchestrator: ObservableObject {
             }
         }
         return QueryResult(
-            answer: answer,
+            answer: answer.map { sanitizeAnswer($0) },
             imageIndex: imageIndex,
             contextItems: relevantItems,
             errorMessage: errorMessage
         )
+    }
+
+    private func sanitizeAnswer(_ text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.contains("\n") && trimmed.count < 60 && trimmed.hasSuffix(".") {
+            return String(trimmed.dropLast())
+        }
+        return trimmed
     }
 }
 

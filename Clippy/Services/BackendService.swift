@@ -30,13 +30,13 @@ struct BackendSearchResult: Codable, Identifiable {
 }
 
 struct BackendSearchResponse: Codable {
-    let query: String
+    let query: String?
     let results: [BackendSearchResult]
-    let total: Int
-    let timeMs: Double
-    let embedMs: Double
-    let searchMs: Double
-    let method: String
+    let total: Int?
+    let timeMs: Double?
+    let embedMs: Double?
+    let searchMs: Double?
+    let method: String?
 
     enum CodingKeys: String, CodingKey {
         case query, results, total, method
@@ -47,12 +47,12 @@ struct BackendSearchResponse: Codable {
 }
 
 struct BackendGroupedSearchResponse: Codable {
-    let query: String
+    let query: String?
     let groups: [String: [BackendSearchResult]]
-    let total: Int
-    let timeMs: Double
-    let embedMs: Double
-    let searchMs: Double
+    let total: Int?
+    let timeMs: Double?
+    let embedMs: Double?
+    let searchMs: Double?
 
     enum CodingKeys: String, CodingKey {
         case query, groups, total
@@ -63,14 +63,14 @@ struct BackendGroupedSearchResponse: Codable {
 }
 
 struct BackendDiscoverResponse: Codable {
-    let query: String
+    let query: String?
     let positiveId: String?
     let negativeId: String?
     let results: [BackendSearchResult]
-    let timeMs: Double
-    let embedMs: Double
-    let searchMs: Double
-    let method: String
+    let timeMs: Double?
+    let embedMs: Double?
+    let searchMs: Double?
+    let method: String?
 
     enum CodingKeys: String, CodingKey {
         case query, results, method

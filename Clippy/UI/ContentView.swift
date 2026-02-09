@@ -14,7 +14,7 @@ struct ContentView: View {
     private var textCaptureService: TextCaptureService { container.textCaptureService }
     private var clippyController: ClippyWindowController { container.clippyController }
     private var localAIService: LocalAIService { container.localAIService }
-    private var geminiService: GeminiService { container.geminiService }
+    private var geminiProvider: GeminiProvider { container.geminiProvider }
     private var audioRecorder: AudioRecorder { container.audioRecorder }
 
     // Constants/State
@@ -133,10 +133,7 @@ struct ContentView: View {
     
     private func setupServices() {
         // Load stored API key
-        let storedKey = getStoredAPIKey()
-        if !storedKey.isEmpty {
-            geminiService.updateApiKey(storedKey)
-        }
+        // API Key is loaded lazily by GeminiProvider from Keychain
         
         // Initialize ElevenLabs Service
         let elevenLabsKey = getStoredElevenLabsKey()
@@ -509,7 +506,6 @@ struct ContentView: View {
     
     private func saveAPIKey(_ key: String) {
         KeychainHelper.save(key: "Gemini_API_Key", value: key)
-        geminiService.updateApiKey(key)
     }
 
     private func getStoredAPIKey() -> String {
