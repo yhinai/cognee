@@ -210,14 +210,7 @@ struct ClipboardListView: View {
         searchText.isEmpty ? filteredItems : searchResults
     }
 
-    private func selectItemAtIndex(_ index: Int, in items: [Item]) {
-        guard index >= 0, index < items.count else { return }
-        let itemId = items[index].persistentModelID
-        // Capture the ID, not the index reference
-        Task { @MainActor in
-            selectedItems = [itemId]
-        }
-    }
+
 
     // MARK: - Shared Row Builder
 
