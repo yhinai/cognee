@@ -84,8 +84,11 @@ struct ClipboardListView: View {
 
     private func handleEscapeKey() -> KeyPress.Result {
         if !selectedItems.isEmpty {
-            deferListMutation {
-                selectedItems.removeAll()
+            // Use Task to break out of the key event handler context
+            Task { @MainActor in
+                withAnimation(.easeOut(duration: 0.15)) {
+                    selectedItems.removeAll()
+                }
             }
             return .handled
         }
@@ -128,10 +131,11 @@ struct ClipboardListView: View {
 
     private func handleFavoriteKey() -> KeyPress.Result {
         let items = currentItems
-        if keyboardIndex >= 0, keyboardIndex < items.count {
-            deferListMutation {
-                items[keyboardIndex].isFavorite.toggle()
-            }
+        guard keyboardIndex >= 0, keyboardIndex < items.count else { return .handled }
+        let item = items[keyboardIndex]
+        // Capture the item reference, not the array index
+        Task { @MainActor in
+            item.isFavorite.toggle()
         }
         return .handled
     }
@@ -191,8 +195,10 @@ struct ClipboardListView: View {
 
     private func selectItemAtIndex(_ index: Int, in items: [Item]) {
         guard index >= 0, index < items.count else { return }
-        deferListMutation {
-            selectedItems = [items[index].persistentModelID]
+        let itemId = items[index].persistentModelID
+        // Capture the ID, not the index reference
+        Task { @MainActor in
+            selectedItems = [itemId]
         }
     }
 
@@ -216,7 +222,7 @@ struct ClipboardListView: View {
                 }
 
                 Button {
-                    deferListMutation {
+                    Task { @MainActor in
                         item.isFavorite.toggle()
                     }
                 } label: {
@@ -287,19 +293,11 @@ struct ClipboardListView: View {
     }
     
     private func deleteItem(_ item: Item) {
-        deferListMutation {
+        Task { @MainActor in
             modelContext.delete(item)
+            // Also remove from vector store
+            try? await container.vectorSearch.deleteDocument(vectorId: item.vectorId ?? UUID())
         }
-        // Note: For complete consistency, we should also delete from Vector DB using ClipboardRepository if available,
-        // but modelContext deletion is propagated via NotificationCenter if setup, or we rely on next app launch sync.
-        // For now, this suffices for UI.
-        Task {
-             try? await container.vectorSearch.deleteDocument(vectorId: item.vectorId ?? UUID())
-        }
-    }
-
-    private func deferListMutation(_ action: @escaping () -> Void) {
-        DispatchQueue.main.async(execute: action)
     }
 }
 
