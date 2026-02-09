@@ -97,9 +97,11 @@ struct ClipboardListView: View {
 
     private func handleUpArrowKey() -> KeyPress.Result {
         let items = currentItems
-        let currentIndex = keyboardIndex
-        guard currentIndex > 0 else { return .handled }
-        let newIndex = currentIndex - 1
+        guard !items.isEmpty else { return .handled }
+        // Clamp current index to valid range in case list shrank
+        let safeIndex = min(keyboardIndex, items.count - 1)
+        guard safeIndex > 0 else { return .handled }
+        let newIndex = safeIndex - 1
         let itemId = items[newIndex].persistentModelID
         Task { @MainActor in
             await Task.yield()
@@ -111,9 +113,11 @@ struct ClipboardListView: View {
 
     private func handleDownArrowKey() -> KeyPress.Result {
         let items = currentItems
-        let currentIndex = keyboardIndex
-        guard currentIndex < items.count - 1 else { return .handled }
-        let newIndex = currentIndex + 1
+        guard !items.isEmpty else { return .handled }
+        // Clamp current index to valid range in case list shrank
+        let safeIndex = min(keyboardIndex, items.count - 1)
+        guard safeIndex < items.count - 1 else { return .handled }
+        let newIndex = safeIndex + 1
         let itemId = items[newIndex].persistentModelID
         Task { @MainActor in
             await Task.yield()
