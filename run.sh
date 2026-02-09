@@ -29,6 +29,7 @@ DEBUG_MODE=false
 CMD_DOWNLOAD=false
 CMD_BUILD=false
 CMD_STOP=false
+SWIFT_ONLY=false
 
 for arg in "$@"; do
     case "$arg" in
@@ -38,6 +39,7 @@ for arg in "$@"; do
         --download)   CMD_DOWNLOAD=true ;;
         --build)      CMD_BUILD=true ;;
         --stop)       CMD_STOP=true ;;
+        --swift-only) SWIFT_ONLY=true ;;
         --help|-h)
             echo "Usage: ./run.sh [OPTIONS]"
             echo ""
@@ -48,6 +50,7 @@ for arg in "$@"; do
             echo "  --download    Download GGUF models (nomic-embed-text, Distil Labs SLM, Qwen3-4B)"
             echo "  --build       Build Clippy.app only (no backend)"
             echo "  --stop        Stop all services (backend, Qdrant)"
+            echo "  --swift-only  Swift-only mode: Qdrant + Clippy.app (no Python backend)"
             echo "  --help, -h    Show this help"
             exit 0
             ;;
@@ -267,24 +270,30 @@ else
 fi
 
 # ── 4. Python venv + deps ─────────────────────────────────────────────────
-cd "$BACKEND_DIR"
-if [ ! -d "venv" ]; then
-    log "Creating Python venv..."
-    "$PYTHON_BIN" -m venv venv
-fi
-source venv/bin/activate
+if [ "$SWIFT_ONLY" = true ]; then
+    ok "Swift-only mode: skipping Python backend"
+else
+    cd "$BACKEND_DIR"
+    if [ ! -d "venv" ]; then
+        log "Creating Python venv..."
+        "$PYTHON_BIN" -m venv venv
+    fi
+    source venv/bin/activate
 
-if ! python -c "import fastapi, qdrant_client, llama_cpp" 2>/dev/null; then
-    log "Installing dependencies..."
-    pip install -q -r requirements.txt 2>&1 | tail -3
-fi
+    if ! python -c "import fastapi, qdrant_client, llama_cpp" 2>/dev/null; then
+        log "Installing dependencies..."
+        pip install -q -r requirements.txt 2>&1 | tail -3
+    fi
 
-COGNEE_OK="no"
-python -c "import cognee" 2>/dev/null && COGNEE_OK="yes"
-ok "Dependencies ready (cognee: $COGNEE_OK)"
+    COGNEE_OK="no"
+    python -c "import cognee" 2>/dev/null && COGNEE_OK="yes"
+    ok "Dependencies ready (cognee: $COGNEE_OK)"
+fi
 
 # ── 5. FastAPI backend ────────────────────────────────────────────────────
-if curl -s "http://localhost:$BACKEND_PORT/health" > /dev/null 2>&1; then
+if [ "$SWIFT_ONLY" = true ]; then
+    ok "Swift-only mode: skipping FastAPI backend (using native MLX)"
+elif curl -s "http://localhost:$BACKEND_PORT/health" > /dev/null 2>&1; then
     ok "Backend already running (port $BACKEND_PORT)"
 else
     log "Starting backend (loading GGUF models on Metal GPU)..."
@@ -316,9 +325,15 @@ fi
 
 # ── 6. Print status ───────────────────────────────────────────────────────
 echo ""
-HEALTH=$(curl -s "http://localhost:$BACKEND_PORT/health" 2>/dev/null)
-echo -e "${CYAN}${BOLD}  Services:${NC}"
-echo "$HEALTH" | python3 -c "
+if [ "$SWIFT_ONLY" = true ]; then
+    echo -e "${CYAN}${BOLD}  Swift-Only Mode Active${NC}"
+    echo "    ✓ Qdrant:      http://localhost:$QDRANT_PORT"
+    echo "    ✓ Local AI:    MLX (Qwen2.5-1.5B + Qwen3-Embedding)"
+    echo "    ✗ Python:      Disabled"
+else
+    HEALTH=$(curl -s "http://localhost:$BACKEND_PORT/health" 2>/dev/null)
+    echo -e "${CYAN}${BOLD}  Services:${NC}"
+    echo "$HEALTH" | python3 -c "
 import sys, json
 try:
     h = json.load(sys.stdin)
@@ -334,11 +349,12 @@ try:
 except: pass
 " 2>/dev/null
 
-echo ""
-echo -e "${CYAN}${BOLD}  URLs:${NC}"
-echo "    API docs:  http://localhost:$BACKEND_PORT/docs"
-echo "    Qdrant:    http://localhost:$QDRANT_PORT/dashboard"
-echo "    Health:    http://localhost:$BACKEND_PORT/health"
+    echo ""
+    echo -e "${CYAN}${BOLD}  URLs:${NC}"
+    echo "    API docs:  http://localhost:$BACKEND_PORT/docs"
+    echo "    Qdrant:    http://localhost:$QDRANT_PORT/dashboard"
+    echo "    Health:    http://localhost:$BACKEND_PORT/health"
+fi
 
 # ── 7. Optional: pipeline test ─────────────────────────────────────────────
 if [ "$RUN_TEST" = true ]; then

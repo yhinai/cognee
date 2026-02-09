@@ -20,6 +20,7 @@ class AppDependencyContainer: ObservableObject {
     let audioRecorder: AudioRecorder
     let queryOrchestrator: QueryOrchestrator
     let usageTracker: UsageTracker
+    let ragService: RAGService
 
     // Backend (Cognee + Qdrant + SLM)
     let backendService: BackendService
@@ -67,6 +68,7 @@ class AppDependencyContainer: ObservableObject {
         self.usageTracker = UsageTracker()
         self.geminiProvider = GeminiProvider()
         self.textCaptureService = TextCaptureService()
+        self.ragService = RAGService(vectorSearch: vectorSearch, localAI: localAIService)
 
         // 2. Multi-provider AI setup
         self.claudeProvider = ClaudeProvider()
